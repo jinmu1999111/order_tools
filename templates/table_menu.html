@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% block title %}{{ table_data.name }} - 注文{% endblock %}
+{% block title %}{{ table.name }} - 注文{% endblock %}
 {% block content %}
 <div class="row">
     <div class="col-md-6">
@@ -8,7 +8,7 @@
         <h4 class="mt-4">{{ category }}</h4>
         <div class="list-group">
             {% for item in items %}
-            <button type="button" class="list-group-item list-group-item-action" onclick='addToCart({{ item|tojson }})'>
+            <button type="button" class="list-group-item list-group-item-action" onclick='addToCart({{ item|tojson|safe }})'>
                 {{ item.name }}
                 <span class="float-end fw-bold">{{ item.price }}円</span>
             </button>
@@ -23,7 +23,7 @@
                 <div class="card-body">
                     <h3 class="h5 card-title">今回の注文（カート）</h3>
                     <ul id="cart-list" class="list-group list-group-flush"></ul>
-                    <button class="btn btn-success w-100 mt-3" onclick="submitOrder()">
+                    <button id="submit-btn" class="btn btn-success w-100 mt-3" onclick="submitOrder()">
                         <i class="bi bi-send"></i> この内容で注文を送信する
                     </button>
                 </div>
@@ -46,21 +46,23 @@
 
 {% block scripts %}
 <script>
-    const TABLE_ID = '{{ table_id }}';
+    const TABLE_ID = {{ table.id }};
     let cart = [];
 
-    // カートに商品を追加
     function addToCart(item) {
         cart.push(item);
         updateCartDisplay();
     }
 
-    // カート表示を更新
     function updateCartDisplay() {
         const cartList = document.getElementById('cart-list');
+        const submitBtn = document.getElementById('submit-btn');
         cartList.innerHTML = '';
         if (cart.length === 0) {
-            cartList.innerHTML = '<li class="list-group-item text-muted">カートは空です</li>';
+            cartList.innerHTML = '<li class="list-group-item text-muted">メニューから商品を選択してください</li>';
+            submitBtn.disabled = true;
+        } else {
+             submitBtn.disabled = false;
         }
         cart.forEach((item, index) => {
             const li = document.createElement('li');
@@ -70,7 +72,6 @@
         });
     }
 
-    // 注文をサーバーに送信
     async function submitOrder() {
         if (cart.length === 0) {
             alert('カートに商品がありません。');
@@ -82,15 +83,14 @@
             body: JSON.stringify({ table_id: TABLE_ID, cart: cart })
         });
         if (response.ok) {
-            cart = []; // カートを空にする
+            cart = [];
             updateCartDisplay();
-            updateOrderStatus(); // すぐに注文状況を更新
+            updateOrderStatus();
         } else {
             alert('注文の送信に失敗しました。');
         }
     }
 
-    // 確定済みの注文状況をサーバーから取得して表示
     async function updateOrderStatus() {
         const response = await fetch(`/api/table_status/${TABLE_ID}`);
         const data = await response.json();
@@ -105,17 +105,16 @@
             } else {
                 statusBadge = '<span class="badge bg-success">提供済</span>';
             }
-            li.innerHTML = `${order.item.name} ${statusBadge}`;
+            li.innerHTML = `${order.name} ${statusBadge}`;
             orderList.appendChild(li);
         });
         document.getElementById('total-price').textContent = `${data.total_price}円`;
     }
 
-    // 初期表示と自動更新
     document.addEventListener('DOMContentLoaded', () => {
         updateCartDisplay();
         updateOrderStatus();
-        setInterval(updateOrderStatus, 10000); // 10秒ごとに更新
+        setInterval(updateOrderStatus, 10000);
     });
 </script>
 {% endblock %}

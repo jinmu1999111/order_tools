@@ -5,13 +5,17 @@
         <h1 class="display-4">テーブルを選択してください</h1>
     </div>
     <div class="row g-3">
-        {% for table_id, table in tables.items() %}
-        <div class="col-md-4">
-            <a href="{{ url_for('table_menu', table_id=table_id) }}" class="d-grid text-decoration-none">
+        {% for table in tables %}
+        <div class="col-md-4 col-6">
+            <a href="{{ url_for('table_menu', table_id=table.id) }}" class="d-grid text-decoration-none">
                 <button class="btn btn-primary btn-lg p-4">
                     {{ table.name }}
                 </button>
             </a>
+        </div>
+        {% else %}
+        <div class="col-12">
+            <p class="text-center text-muted">テーブルがまだ登録されていません。管理者画面から追加してください。</p>
         </div>
         {% endfor %}
     </div>

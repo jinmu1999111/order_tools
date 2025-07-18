@@ -10,17 +10,15 @@
 
 {% block scripts %}
 <script>
-    // 注文を提供済みにする
-    async function serveOrder(tableId, orderId) {
+    async function serveOrder(orderId) {
         await fetch('/api/order/serve', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ table_id: tableId, order_id: orderId })
+            body: JSON.stringify({ order_id: orderId })
         });
         updateKitchenStatus();
     }
 
-    // キッチンの状況を更新
     async function updateKitchenStatus() {
         const response = await fetch('/api/kitchen_status');
         const data = await response.json();
@@ -28,7 +26,7 @@
         grid.innerHTML = '';
 
         if (data.pending_orders.length === 0) {
-            grid.innerHTML = '<p class="text-muted">新しい注文はありません。</p>';
+            grid.innerHTML = '<div class="col-12"><p class="text-center text-muted fs-4 mt-5">新しい注文はありません。</p></div>';
             return;
         }
 
@@ -37,13 +35,13 @@
             col.className = 'col-lg-3 col-md-4 col-sm-6 mb-4';
             col.innerHTML = `
                 <div class="card h-100 shadow-sm">
-                    <div class="card-header fw-bold">${order.table_name}</div>
+                    <div class="card-header fw-bold fs-5">${order.table_name}</div>
                     <div class="card-body">
-                        <h5 class="card-title">${order.item.name}</h5>
+                        <h5 class="card-title fs-4">${order.item_name}</h5>
                         <p class="card-text text-muted">受付: ${order.timestamp}</p>
                     </div>
-                    <div class="card-footer">
-                        <button class="btn btn-success w-100" onclick="serveOrder('${order.table_id}', ${order.id})">
+                    <div class="card-footer p-2">
+                        <button class="btn btn-success w-100 fw-bold" onclick="serveOrder(${order.id})">
                             提供OK
                         </button>
                     </div>
@@ -53,7 +51,6 @@
         });
     }
 
-    // 初期表示と自動更新
     document.addEventListener('DOMContentLoaded', updateKitchenStatus);
     setInterval(updateKitchenStatus, 5000); // 5秒ごとに更新
 </script>

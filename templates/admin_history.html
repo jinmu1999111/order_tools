@@ -3,7 +3,7 @@
 {% block content %}
 <h1 class="mb-4">注文履歴管理</h1>
 <div class="alert alert-warning" role="alert">
-  注意：ここで履歴を削除すると、そのテーブルの全ての注文データが完全に消去されます。
+  注意：ここで履歴を削除すると、そのテーブルの全ての注文データが完全に消去されます。お会計が済んだテーブルごとに行ってください。
 </div>
 <div class="row">
     {% for table in tables %}
@@ -16,14 +16,17 @@
                 </form>
             </div>
             <ul class="list-group list-group-flush">
-                {% for order in table.orders %}
+                {% for order in table.orders.order_by(table.orders.model.timestamp.desc()).limit(10) %}
                     <li class="list-group-item">
                         {{ order.item_name }} - {{ order.item_price }}円
-                        <span class="text-muted float-end">{{ order.timestamp.strftime('%Y-%m-%d %H:%M') }}</span>
+                        <span class="text-muted float-end">{{ order.timestamp.strftime('%H:%M') }}</span>
                     </li>
                 {% else %}
                     <li class="list-group-item text-muted">注文履歴はありません。</li>
                 {% endfor %}
+                 {% if table.orders.count() > 10 %}
+                    <li class="list-group-item text-center text-muted">...他{{ table.orders.count() - 10 }}件</li>
+                {% endif %}
             </ul>
         </div>
     </div>
