@@ -1,0 +1,121 @@
+{% extends "layout.html" %}
+{% block title %}{{ table_data.name }} - 注文{% endblock %}
+{% block content %}
+<div class="row">
+    <div class="col-md-6">
+        <h2 class="mb-3">🗒️ メニュー</h2>
+        {% for category, items in categorized_menu.items()|sort %}
+        <h4 class="mt-4">{{ category }}</h4>
+        <div class="list-group">
+            {% for item in items %}
+            <button type="button" class="list-group-item list-group-item-action" onclick='addToCart({{ item|tojson }})'>
+                {{ item.name }}
+                <span class="float-end fw-bold">{{ item.price }}円</span>
+            </button>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="col-md-6">
+        <div class="position-sticky" style="top: 80px;">
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <h3 class="h5 card-title">今回の注文（カート）</h3>
+                    <ul id="cart-list" class="list-group list-group-flush"></ul>
+                    <button class="btn btn-success w-100 mt-3" onclick="submitOrder()">
+                        <i class="bi bi-send"></i> この内容で注文を送信する
+                    </button>
+                </div>
+            </div>
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h3 class="h5 card-title">📋 注文状況</h3>
+                    <ul id="order-list" class="list-group list-group-flush"></ul>
+                    <hr>
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <h4 class="h5 mb-0">お会計合計:</h4>
+                        <h4 class="h5 mb-0" id="total-price">0円</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const TABLE_ID = '{{ table_id }}';
+    let cart = [];
+
+    // カートに商品を追加
+    function addToCart(item) {
+        cart.push(item);
+        updateCartDisplay();
+    }
+
+    // カート表示を更新
+    function updateCartDisplay() {
+        const cartList = document.getElementById('cart-list');
+        cartList.innerHTML = '';
+        if (cart.length === 0) {
+            cartList.innerHTML = '<li class="list-group-item text-muted">カートは空です</li>';
+        }
+        cart.forEach((item, index) => {
+            const li = document.createElement('li');
+            li.className = 'list-group-item';
+            li.innerHTML = `${item.name} <span class="float-end">${item.price}円</span>`;
+            cartList.appendChild(li);
+        });
+    }
+
+    // 注文をサーバーに送信
+    async function submitOrder() {
+        if (cart.length === 0) {
+            alert('カートに商品がありません。');
+            return;
+        }
+        const response = await fetch('/api/order/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ table_id: TABLE_ID, cart: cart })
+        });
+        if (response.ok) {
+            cart = []; // カートを空にする
+            updateCartDisplay();
+            updateOrderStatus(); // すぐに注文状況を更新
+        } else {
+            alert('注文の送信に失敗しました。');
+        }
+    }
+
+    // 確定済みの注文状況をサーバーから取得して表示
+    async function updateOrderStatus() {
+        const response = await fetch(`/api/table_status/${TABLE_ID}`);
+        const data = await response.json();
+        const orderList = document.getElementById('order-list');
+        orderList.innerHTML = '';
+        data.orders.forEach(order => {
+            const li = document.createElement('li');
+            li.className = 'list-group-item';
+            let statusBadge = '';
+            if (order.status === 'pending') {
+                statusBadge = '<span class="badge bg-warning text-dark">調理中</span>';
+            } else {
+                statusBadge = '<span class="badge bg-success">提供済</span>';
+            }
+            li.innerHTML = `${order.item.name} ${statusBadge}`;
+            orderList.appendChild(li);
+        });
+        document.getElementById('total-price').textContent = `${data.total_price}円`;
+    }
+
+    // 初期表示と自動更新
+    document.addEventListener('DOMContentLoaded', () => {
+        updateCartDisplay();
+        updateOrderStatus();
+        setInterval(updateOrderStatus, 10000); // 10秒ごとに更新
+    });
+</script>
+{% endblock %}

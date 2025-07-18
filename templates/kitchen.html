@@ -1,0 +1,60 @@
+{% extends "layout.html" %}
+{% block title %}キッチン伝票{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <h1 class="mb-4">🍳 キッチン伝票 (調理待ち)</h1>
+    <div id="pending-orders-grid" class="row">
+        </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // 注文を提供済みにする
+    async function serveOrder(tableId, orderId) {
+        await fetch('/api/order/serve', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ table_id: tableId, order_id: orderId })
+        });
+        updateKitchenStatus();
+    }
+
+    // キッチンの状況を更新
+    async function updateKitchenStatus() {
+        const response = await fetch('/api/kitchen_status');
+        const data = await response.json();
+        const grid = document.getElementById('pending-orders-grid');
+        grid.innerHTML = '';
+
+        if (data.pending_orders.length === 0) {
+            grid.innerHTML = '<p class="text-muted">新しい注文はありません。</p>';
+            return;
+        }
+
+        data.pending_orders.forEach(order => {
+            const col = document.createElement('div');
+            col.className = 'col-lg-3 col-md-4 col-sm-6 mb-4';
+            col.innerHTML = `
+                <div class="card h-100 shadow-sm">
+                    <div class="card-header fw-bold">${order.table_name}</div>
+                    <div class="card-body">
+                        <h5 class="card-title">${order.item.name}</h5>
+                        <p class="card-text text-muted">受付: ${order.timestamp}</p>
+                    </div>
+                    <div class="card-footer">
+                        <button class="btn btn-success w-100" onclick="serveOrder('${order.table_id}', ${order.id})">
+                            提供OK
+                        </button>
+                    </div>
+                </div>
+            `;
+            grid.appendChild(col);
+        });
+    }
+
+    // 初期表示と自動更新
+    document.addEventListener('DOMContentLoaded', updateKitchenStatus);
+    setInterval(updateKitchenStatus, 5000); // 5秒ごとに更新
+</script>
+{% endblock %}
