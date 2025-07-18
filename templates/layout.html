@@ -15,6 +15,7 @@
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavDropdown" aria-controls="navbarNavDropdown" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
+
             <div class="collapse navbar-collapse" id="navbarNavDropdown">
                 <ul class="navbar-nav ms-auto">
                     {% if current_user.is_authenticated %}
@@ -26,6 +27,8 @@
                             <ul class="dropdown-menu dropdown-menu-end">
                                 <li><a class="dropdown-item" href="{{ url_for('admin_menu') }}">メニュー管理</a></li>
                                 <li><a class="dropdown-item" href="{{ url_for('admin_tables') }}">卓管理</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{{ url_for('admin_history') }}">注文履歴</a></li>
                             </ul>
                         </li>
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('logout') }}">ログアウト</a></li>
@@ -34,7 +37,7 @@
                     {% endif %}
                 </ul>
             </div>
-            </div>
+        </div>
     </nav>
 
     <main class="container" style="padding-top: 70px;">

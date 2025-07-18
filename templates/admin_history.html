@@ -1,0 +1,32 @@
+{% extends "layout.html" %}
+{% block title %}注文履歴{% endblock %}
+{% block content %}
+<h1 class="mb-4">注文履歴管理</h1>
+<div class="alert alert-warning" role="alert">
+  注意：ここで履歴を削除すると、そのテーブルの全ての注文データが完全に消去されます。
+</div>
+<div class="row">
+    {% for table in tables %}
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">{{ table.name }}</h5>
+                <form action="{{ url_for('clear_history', table_id=table.id) }}" method="post" onsubmit="return confirm('本当に「{{ table.name }}」の全履歴を削除しますか？');">
+                    <button type="submit" class="btn btn-danger btn-sm">この卓の履歴を全削除</button>
+                </form>
+            </div>
+            <ul class="list-group list-group-flush">
+                {% for order in table.orders %}
+                    <li class="list-group-item">
+                        {{ order.item_name }} - {{ order.item_price }}円
+                        <span class="text-muted float-end">{{ order.timestamp.strftime('%Y-%m-%d %H:%M') }}</span>
+                    </li>
+                {% else %}
+                    <li class="list-group-item text-muted">注文履歴はありません。</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
