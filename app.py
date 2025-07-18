@@ -72,7 +72,15 @@ def table_menu(table_id):
     for item in menu_items:
         if item.category not in categorized_menu:
             categorized_menu[item.category] = []
-        categorized_menu[item.category].append(item)
+        
+        # ▼▼▼ JavaScriptで扱えるように、シンプルな辞書形式に変換する ▼▼▼
+        item_data = {
+            'id': item.id,
+            'name': item.name,
+            'price': item.price,
+            'category': item.category
+        }
+        categorized_menu[item.category].append(item_data)
         
     return render_template('table_menu.html', table=table, categorized_menu=categorized_menu)
 
