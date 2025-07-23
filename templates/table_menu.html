@@ -1,43 +1,210 @@
 {% extends "layout.html" %}
 {% block title %}{{ table.name }} - 注文{% endblock %}
 {% block content %}
-<div class="row">
-    <div class="col-md-6">
-        <h2 class="mb-3">🗒️ メニュー</h2>
-        {% for category, items in categorized_menu.items()|sort %}
-        <h4 class="mt-4">{{ category }}</h4>
-        <div class="list-group">
-            {% for item in items %}
-            <button type="button" class="list-group-item list-group-item-action" onclick='addToCart({{ item|tojson|safe }})'>
-                {{ item.name }}
-                <span class="float-end fw-bold">{{ item.price }}円</span>
-            </button>
-            {% endfor %}
-        </div>
-        {% endfor %}
-    </div>
-
-    <div class="col-md-6">
-        <div class="position-sticky" style="top: 80px;">
-            <div class="card shadow-sm mb-4">
-                <div class="card-body">
-                    <h3 class="h5 card-title">今回の注文（カート）</h3>
-                    <ul id="cart-list" class="list-group list-group-flush"></ul>
-                    <button id="submit-btn" class="btn btn-success w-100 mt-3" onclick="submitOrder()">
-                        <i class="bi bi-send"></i> この内容で注文を送信する
-                    </button>
-                </div>
-            </div>
-            <div class="card shadow-sm">
-                <div class="card-body">
-                    <h3 class="h5 card-title">📋 注文状況</h3>
-                    <ul id="order-list" class="list-group list-group-flush"></ul>
-                    <hr>
-                    <div class="d-flex justify-content-between align-items-center mt-3">
-                        <h4 class="h5 mb-0">お会計合計:</h4>
-                        <h4 class="h5 mb-0" id="total-price">0円</h4>
+<div class="container-fluid">
+    <!-- ヘッダー -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card bg-primary text-white">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h3 class="mb-0">
+                                <i class="bi bi-table"></i> {{ table.name }}
+                            </h3>
+                            <small>いらっしゃいませ！メニューからお選びください</small>
+                        </div>
+                        <div class="text-end">
+                            <div class="badge bg-light text-dark fs-6" id="table-status">
+                                <i class="bi bi-circle-fill text-success"></i> 利用中
+                            </div>
+                        </div>
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- メニュー部分 -->
+        <div class="col-lg-7 mb-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h4 class="mb-0">
+                            <i class="bi bi-menu-button-wide"></i> メニュー
+                        </h4>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button type="button" class="btn btn-outline-primary" onclick="filterCategory('all')" id="filter-all">
+                                すべて
+                            </button>
+                            {% for category in categorized_menu.keys() %}
+                            <button type="button" class="btn btn-outline-primary" onclick="filterCategory('{{ category }}')" id="filter-{{ category }}">
+                                {{ category }}
+                            </button>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="menu-container" style="max-height: 70vh; overflow-y: auto;">
+                        {% for category, items in categorized_menu.items()|sort %}
+                        <div class="category-section" data-category="{{ category }}">
+                            <div class="bg-light p-3 border-bottom">
+                                <h5 class="mb-0 text-primary">
+                                    <i class="bi bi-tag"></i> {{ category }}
+                                    <span class="badge bg-primary ms-2">{{ items|length }}品</span>
+                                </h5>
+                            </div>
+                            <div class="list-group list-group-flush">
+                                {% for item in items %}
+                                <div class="list-group-item list-group-item-action menu-item" 
+                                     data-category="{{ category }}"
+                                     onclick='addToCart({{ item|tojson|safe }})'>
+                                    <div class="d-flex justify-content-between align-items-start">
+                                        <div class="flex-grow-1">
+                                            <h6 class="mb-1 fw-bold">{{ item.name }}</h6>
+                                            {% if item.description %}
+                                            <p class="mb-1 text-muted small">{{ item.description }}</p>
+                                            {% endif %}
+                                            <small class="text-success fw-bold">
+                                                <i class="bi bi-currency-yen"></i> {{ "{:,}".format(item.price) }}
+                                            </small>
+                                        </div>
+                                        {% if item.image_url %}
+                                        <div class="ms-3">
+                                            <img src="{{ item.image_url }}" alt="{{ item.name }}" 
+                                                 class="rounded" style="width: 60px; height: 60px; object-fit: cover;">
+                                        </div>
+                                        {% endif %}
+                                        <div class="ms-3 d-flex align-items-center">
+                                            <button type="button" class="btn btn-primary btn-sm">
+                                                <i class="bi bi-plus-lg"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 注文・カート部分 -->
+        <div class="col-lg-5">
+            <div class="position-sticky" style="top: 80px;">
+                <!-- カート -->
+                <div class="card shadow-sm mb-3">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0">
+                            <i class="bi bi-cart3"></i> 今回の注文
+                            <span class="badge bg-dark ms-2" id="cart-count">0</span>
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <ul id="cart-list" class="list-group list-group-flush">
+                            <li class="list-group-item text-muted text-center py-4">
+                                <i class="bi bi-cart-x" style="font-size: 2rem;"></i>
+                                <p class="mt-2 mb-0">メニューから商品を選択してください</p>
+                            </li>
+                        </ul>
+                        
+                        <!-- 特別要望入力 -->
+                        <div class="mt-3" id="notes-section" style="display: none;">
+                            <label for="order-notes" class="form-label small">特別なご要望・アレルギー情報など</label>
+                            <textarea class="form-control form-control-sm" id="order-notes" rows="2" 
+                                      placeholder="例：辛さ控えめ、アレルギー対応など"></textarea>
+                        </div>
+                        
+                        <div class="d-grid mt-3">
+                            <button id="submit-btn" class="btn btn-success btn-lg" onclick="submitOrder()" disabled>
+                                <i class="bi bi-send"></i> この内容で注文を送信
+                                <span id="cart-total" class="ms-2">¥0</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 注文状況 -->
+                <div class="card shadow-sm">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0">
+                            <i class="bi bi-clock-history"></i> 注文状況
+                            <button class="btn btn-sm btn-outline-light ms-2" onclick="updateOrderStatus()" title="更新">
+                                <i class="bi bi-arrow-clockwise"></i>
+                            </button>
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <ul id="order-list" class="list-group list-group-flush">
+                            <li class="list-group-item text-muted text-center py-3">
+                                <i class="bi bi-hourglass-split"></i>
+                                <p class="mt-1 mb-0 small">注文履歴を読み込み中...</p>
+                            </li>
+                        </ul>
+                        
+                        <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
+                            <h5 class="mb-0">お会計合計:</h5>
+                            <h4 class="mb-0 text-primary" id="total-price">¥0</h4>
+                        </div>
+                        
+                        <div class="mt-2">
+                            <small class="text-muted">
+                                <i class="bi bi-info-circle"></i> 
+                                お会計はお帰りの際にレジでお支払いください
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 注文確認モーダル -->
+<div class="modal fade" id="orderConfirmModal" tabindex="-1" aria-labelledby="orderConfirmModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="orderConfirmModalLabel">注文内容の確認</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="orderConfirmBody">
+                <!-- 注文内容がここに表示される -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">変更する</button>
+                <button type="button" class="btn btn-success" id="confirmOrderBtn">
+                    <i class="bi bi-check-circle"></i> 注文を確定
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 成功モーダル -->
+<div class="modal fade" id="successModal" tabindex="-1" aria-labelledby="successModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="successModalLabel">
+                    <i class="bi bi-check-circle"></i> 注文完了
+                </h5>
+            </div>
+            <div class="modal-body text-center">
+                <div class="mb-3">
+                    <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
+                </div>
+                <h4>ご注文ありがとうございます！</h4>
+                <p class="mb-0">キッチンに注文が送信されました。<br>調理完了までしばらくお待ちください。</p>
+            </div>
+            <div class="modal-footer justify-content-center">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
+                    <i class="bi bi-arrow-left"></i> メニューに戻る
+                </button>
             </div>
         </div>
     </div>
@@ -46,85 +213,427 @@
 
 {% block scripts %}
 <script>
-    const TABLE_ID = {{ table.id }};
-    let cart = [];
+const TABLE_ID = {{ table.id }};
+let cart = [];
+let currentFilter = 'all';
 
-    // カートに商品を追加
-    function addToCart(item) {
-        cart.push(item);
-        updateCartDisplay();
-    }
+// カートに商品を追加
+function addToCart(item) {
+    cart.push({
+        ...item,
+        cartId: Date.now() + Math.random() // カート内でのユニークID
+    });
+    updateCartDisplay();
+    
+    // 追加アニメーション
+    showNotification(`${item.name}をカートに追加しました`, 'success');
+}
 
-    // カートの表示とボタンの状態を更新
-    function updateCartDisplay() {
-        const cartList = document.getElementById('cart-list');
-        const submitBtn = document.getElementById('submit-btn');
-        cartList.innerHTML = '';
+// カートから商品を削除
+function removeFromCart(cartId) {
+    cart = cart.filter(item => item.cartId !== cartId);
+    updateCartDisplay();
+}
 
-        if (cart.length === 0) {
-            cartList.innerHTML = '<li class="list-group-item text-muted">メニューから商品を選択してください</li>';
-            if (submitBtn) {
-                submitBtn.disabled = true; // カートが空ならボタンを無効化
+// カート表示を更新
+function updateCartDisplay() {
+    const cartList = document.getElementById('cart-list');
+    const submitBtn = document.getElementById('submit-btn');
+    const cartCount = document.getElementById('cart-count');
+    const cartTotal = document.getElementById('cart-total');
+    const notesSection = document.getElementById('notes-section');
+    
+    cartCount.textContent = cart.length;
+    
+    if (cart.length === 0) {
+        cartList.innerHTML = `
+            <li class="list-group-item text-muted text-center py-4">
+                <i class="bi bi-cart-x" style="font-size: 2rem;"></i>
+                <p class="mt-2 mb-0">メニューから商品を選択してください</p>
+            </li>
+        `;
+        submitBtn.disabled = true;
+        cartTotal.textContent = '¥0';
+        notesSection.style.display = 'none';
+    } else {
+        let html = '';
+        let total = 0;
+        
+        // 同じ商品をグループ化
+        const groupedCart = {};
+        cart.forEach(item => {
+            const key = `${item.id}_${item.name}`;
+            if (!groupedCart[key]) {
+                groupedCart[key] = {
+                    ...item,
+                    quantity: 0,
+                    cartIds: []
+                };
             }
+            groupedCart[key].quantity++;
+            groupedCart[key].cartIds.push(item.cartId);
+            total += item.price;
+        });
+        
+        Object.values(groupedCart).forEach(item => {
+            html += `
+                <li class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="flex-grow-1">
+                            <h6 class="mb-0">${item.name}</h6>
+                            <small class="text-muted">¥${item.price.toLocaleString()} × ${item.quantity}</small>
+                        </div>
+                        <div class="d-flex align-items-center">
+                            <span class="me-2 fw-bold">¥${(item.price * item.quantity).toLocaleString()}</span>
+                            <button class="btn btn-sm btn-outline-danger" onclick="removeFromCart('${item.cartIds[0]}')" title="削除">
+                                <i class="bi bi-dash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </li>
+            `;
+        });
+        
+        cartList.innerHTML = html;
+        submitBtn.disabled = false;
+        cartTotal.textContent = `¥${total.toLocaleString()}`;
+        notesSection.style.display = 'block';
+    }
+}
+
+// カテゴリフィルター
+function filterCategory(category) {
+    currentFilter = category;
+    
+    // ボタンの状態を更新
+    document.querySelectorAll('[id^="filter-"]').forEach(btn => {
+        btn.classList.remove('active');
+        btn.classList.add('btn-outline-primary');
+        btn.classList.remove('btn-primary');
+    });
+    
+    const activeBtn = document.getElementById(`filter-${category}`);
+    if (activeBtn) {
+        activeBtn.classList.add('active', 'btn-primary');
+        activeBtn.classList.remove('btn-outline-primary');
+    }
+    
+    // メニュー項目の表示/非表示
+    document.querySelectorAll('.category-section').forEach(section => {
+        if (category === 'all' || section.dataset.category === category) {
+            section.style.display = 'block';
         } else {
-            if (submitBtn) {
-                submitBtn.disabled = false; // カートに商品があればボタンを有効化
-            }
-            cart.forEach((item, index) => {
-                const li = document.createElement('li');
-                li.className = 'list-group-item';
-                li.innerHTML = `${item.name} <span class="float-end">${item.price}円</span>`;
-                cartList.appendChild(li);
-            });
+            section.style.display = 'none';
         }
-    }
+    });
+}
 
-    // 注文をサーバーに送信
-    async function submitOrder() {
-        if (cart.length === 0) {
-            alert('カートに商品がありません。');
-            return;
+// 注文送信
+async function submitOrder() {
+    if (cart.length === 0) {
+        alert('カートに商品がありません。');
+        return;
+    }
+    
+    // 確認モーダルを表示
+    showOrderConfirmModal();
+}
+
+// 注文確認モーダルを表示
+function showOrderConfirmModal() {
+    const modalBody = document.getElementById('orderConfirmBody');
+    const notes = document.getElementById('order-notes').value;
+    
+    // グループ化されたカート内容を生成
+    const groupedCart = {};
+    let total = 0;
+    
+    cart.forEach(item => {
+        const key = `${item.id}_${item.name}`;
+        if (!groupedCart[key]) {
+            groupedCart[key] = { ...item, quantity: 0 };
         }
+        groupedCart[key].quantity++;
+        total += item.price;
+    });
+    
+    let itemsHtml = '';
+    Object.values(groupedCart).forEach(item => {
+        itemsHtml += `
+            <tr>
+                <td>${item.name}</td>
+                <td class="text-center">${item.quantity}</td>
+                <td class="text-end">¥${item.price.toLocaleString()}</td>
+                <td class="text-end fw-bold">¥${(item.price * item.quantity).toLocaleString()}</td>
+            </tr>
+        `;
+    });
+    
+    modalBody.innerHTML = `
+        <div class="mb-3">
+            <h6>ご注文内容</h6>
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>商品名</th>
+                            <th class="text-center">数量</th>
+                            <th class="text-end">単価</th>
+                            <th class="text-end">小計</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itemsHtml}
+                    </tbody>
+                    <tfoot>
+                        <tr class="table-primary">
+                            <th colspan="3">合計</th>
+                            <th class="text-end">¥${total.toLocaleString()}</th>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+        ${notes ? `
+            <div class="mb-3">
+                <h6>特別なご要望</h6>
+                <div class="alert alert-info">
+                    <i class="bi bi-chat-quote"></i> ${notes}
+                </div>
+            </div>
+        ` : ''}
+        <div class="alert alert-warning">
+            <i class="bi bi-exclamation-triangle"></i>
+            注文送信後は内容の変更ができません。よろしいですか？
+        </div>
+    `;
+    
+    document.getElementById('confirmOrderBtn').onclick = confirmOrder;
+    new bootstrap.Modal(document.getElementById('orderConfirmModal')).show();
+}
+
+// 注文確定
+async function confirmOrder() {
+    const notes = document.getElementById('order-notes').value;
+    
+    try {
         const response = await fetch('/api/order/submit', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ table_id: TABLE_ID, cart: cart })
+            body: JSON.stringify({ 
+                table_id: TABLE_ID, 
+                cart: cart,
+                notes: notes
+            })
         });
+        
         if (response.ok) {
+            // 確認モーダルを閉じる
+            bootstrap.Modal.getInstance(document.getElementById('orderConfirmModal')).hide();
+            
+            // 成功モーダルを表示
+            new bootstrap.Modal(document.getElementById('successModal')).show();
+            
+            // カートをクリア
             cart = [];
             updateCartDisplay();
-            updateOrderStatus();
+            document.getElementById('order-notes').value = '';
+            
+            // 注文状況を更新
+            setTimeout(() => {
+                updateOrderStatus();
+            }, 1000);
         } else {
-            alert('注文の送信に失敗しました。');
+            const data = await response.json();
+            alert('注文の送信に失敗しました: ' + (data.message || '不明なエラー'));
         }
+    } catch (error) {
+        alert('エラーが発生しました: ' + error.message);
     }
+}
 
-    // 確定済みの注文状況をサーバーから取得して表示
-    async function updateOrderStatus() {
+// 注文状況を更新
+async function updateOrderStatus() {
+    try {
         const response = await fetch(`/api/table_status/${TABLE_ID}`);
         const data = await response.json();
         const orderList = document.getElementById('order-list');
-        orderList.innerHTML = '';
-        data.orders.forEach(order => {
-            const li = document.createElement('li');
-            li.className = 'list-group-item';
-            let statusBadge = '';
-            if (order.status === 'pending') {
-                statusBadge = '<span class="badge bg-warning text-dark">調理中</span>';
-            } else {
-                statusBadge = '<span class="badge bg-success">提供済</span>';
+        
+        if (data.orders && data.orders.length > 0) {
+            let html = '';
+            
+            data.orders.forEach(order => {
+                let statusBadge = '';
+                let statusIcon = '';
+                
+                switch (order.status) {
+                    case 'pending':
+                        statusBadge = '<span class="badge bg-warning text-dark">調理待ち</span>';
+                        statusIcon = 'clock-history';
+                        break;
+                    case 'preparing':
+                        statusBadge = '<span class="badge bg-info">調理中</span>';
+                        statusIcon = 'fire';
+                        break;
+                    case 'ready':
+                        statusBadge = '<span class="badge bg-primary">調理完了</span>';
+                        statusIcon = 'check-circle';
+                        break;
+                    case 'served':
+                        statusBadge = '<span class="badge bg-success">提供済み</span>';
+                        statusIcon = 'check-square';
+                        break;
+                }
+                
+                html += `
+                    <li class="list-group-item">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="flex-grow-1">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-${statusIcon} me-2"></i>
+                                    <div>
+                                        <h6 class="mb-0">${order.name}</h6>
+                                        ${order.quantity > 1 ? `<small class="text-muted">× ${order.quantity}</small>` : ''}
+                                        ${order.notes ? `<div class="small text-info mt-1"><i class="bi bi-chat-quote"></i> ${order.notes}</div>` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="text-end">
+                                ${statusBadge}
+                                <div class="small text-muted mt-1">¥${(order.price * (order.quantity || 1)).toLocaleString()}</div>
+                            </div>
+                        </div>
+                    </li>
+                `;
+            });
+            
+            orderList.innerHTML = html;
+        } else {
+            orderList.innerHTML = `
+                <li class="list-group-item text-muted text-center py-3">
+                    <i class="bi bi-inbox"></i>
+                    <p class="mt-1 mb-0 small">まだ注文がありません</p>
+                </li>
+            `;
+        }
+        
+        document.getElementById('total-price').textContent = `¥${(data.total_price || 0).toLocaleString()}`;
+        
+        // テーブルステータスも更新
+        const statusElement = document.getElementById('table-status');
+        if (data.table_status) {
+            switch (data.table_status) {
+                case 'occupied':
+                    statusElement.innerHTML = '<i class="bi bi-circle-fill text-success"></i> 利用中';
+                    break;
+                case 'available':
+                    statusElement.innerHTML = '<i class="bi bi-circle-fill text-secondary"></i> 空席';
+                    break;
+                default:
+                    statusElement.innerHTML = '<i class="bi bi-circle-fill text-info"></i> ' + data.table_status;
             }
-            li.innerHTML = `${order.name} ${statusBadge}`;
-            orderList.appendChild(li);
-        });
-        document.getElementById('total-price').textContent = `${data.total_price}円`;
+        }
+        
+    } catch (error) {
+        console.error('注文状況更新エラー:', error);
     }
+}
 
-    // 初期表示と自動更新
-    document.addEventListener('DOMContentLoaded', () => {
-        updateCartDisplay();
+// 通知表示
+function showNotification(message, type = 'info') {
+    // 簡易通知（実際の実装ではlayoutのshowNotification関数を使用）
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+    toast.style.cssText = 'top: 80px; right: 20px; z-index: 1080; max-width: 300px;';
+    toast.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.parentNode.removeChild(toast);
+        }
+    }, 3000);
+}
+
+// キーボードショートカット
+document.addEventListener('keydown', function(e) {
+    // Ctrl + Enter で注文送信
+    if (e.ctrlKey && e.key === 'Enter' && cart.length > 0) {
+        e.preventDefault();
+        submitOrder();
+    }
+    
+    // Escape でモーダルを閉じる
+    if (e.key === 'Escape') {
+        const modals = document.querySelectorAll('.modal.show');
+        modals.forEach(modal => {
+            bootstrap.Modal.getInstance(modal)?.hide();
+        });
+    }
+});
+
+// スワイプジェスチャー（モバイル対応）
+let startX = 0;
+let startY = 0;
+
+document.addEventListener('touchstart', function(e) {
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+});
+
+document.addEventListener('touchend', function(e) {
+    if (!startX || !startY) return;
+    
+    const endX = e.changedTouches[0].clientX;
+    const endY = e.changedTouches[0].clientY;
+    
+    const diffX = startX - endX;
+    const diffY = startY - endY;
+    
+    // 横スワイプでカテゴリ切り替え
+    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
+        const categories = ['all', ...Object.keys({{ categorized_menu|tojson }})];
+        const currentIndex = categories.indexOf(currentFilter);
+        
+        if (diffX > 0 && currentIndex < categories.length - 1) {
+            // 左スワイプ：次のカテゴリ
+            filterCategory(categories[currentIndex + 1]);
+        } else if (diffX < 0 && currentIndex > 0) {
+            // 右スワイプ：前のカテゴリ
+            filterCategory(categories[currentIndex - 1]);
+        }
+    }
+    
+    startX = 0;
+    startY = 0;
+});
+
+// ページ読み込み時の初期化
+document.addEventListener('DOMContentLoaded', function() {
+    updateCartDisplay();
+    updateOrderStatus();
+    
+    // 定期的に注文状況を更新
+    setInterval(updateOrderStatus, 15000); // 15秒ごと
+    
+    // 初期フィルター設定
+    filterCategory('all');
+    
+    // サービスワーカー登録（オフライン対応）
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(console.error);
+    }
+});
+
+// ページの可視性変更時の処理
+document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) {
+        // ページが表示されたら即座に注文状況を更新
         updateOrderStatus();
-        setInterval(updateOrderStatus, 10000);
-    });
+    }
+});
 </script>
 {% endblock %}
