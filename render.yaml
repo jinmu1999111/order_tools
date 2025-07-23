@@ -1,0 +1,24 @@
+# Render Blueprint for the Order Tools Flask Application
+# https://render.com/docs/blueprints
+
+services:
+  - type: web
+    name: order-tools
+    env: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn app:app" # Ensure app:app matches your Flask app object name
+    plan: starter # You can choose 'starter', 'standard', etc. based on your needs
+    envVars:
+      - key: DATABASE_URL # PostgreSQL database URL will be injected by Render
+        fromDatabase:
+          name: order_tools_db
+          property: connectionString
+      - key: SECRET_KEY # A strong, random key for Flask session security
+        generateValue: true # Render will generate a random value for you
+      - key: PYTHON_VERSION
+        value: 3.9.12 # Or your preferred Python version, e.g., 3.10.x, 3.11.x
+    healthCheckPath: / # Or a specific endpoint if you have one, e.g., /api/health
+
+databases:
+  - name: order_tools_db
+    plan: starter # Starter plan for testing. Consider 'standard' for production.
