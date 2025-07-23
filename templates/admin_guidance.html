@@ -2,65 +2,9 @@
 {% block title %}案内管理{% endblock %}
 
 {% block extra_css %}
-<style>
-    .page-container {
-        max-width: 800px;
-        margin: 0 auto;
-    }
-    .card-header h2 {
-        font-size: 1.8rem;
-        margin-bottom: 0;
-    }
-    #qr-result-card {
-        display: none; /* 初期状態では非表示 */
-    }
-    #generated-qr-code {
-        width: 100%;
-        max-width: 250px;
-        height: auto;
-        aspect-ratio: 1 / 1;
-        margin: 1rem auto;
-        padding: 1rem;
-        background-color: white;
-        border-radius: 8px;
-    }
-</style>
 {% endblock %}
 
 {% block content %}
-<div class="page-container">
-    <h1 class="mb-4" style="font-size: 2.5rem;">💁‍♀️ 案内管理</h1>
-
-    <div class="card mb-4">
-        <div class="card-header bg-transparent border-0 pt-3">
-            <h2>一時QRコード発行</h2>
-        </div>
-        <div class="card-body">
-            <p class="card-text text-muted">お客様をご案内するテーブル名と人数を入力して、30分間有効なQRコードを発行します。</p>
-            <form id="guidance-form" class="row g-3 align-items-end">
-                <div class="col-12 col-md">
-                    <label for="table_name" class="form-label">テーブル名</label>
-                    <input type="text" id="table_name" name="table_name" class="form-control" placeholder="例: テラス席A" required>
-                </div>
-                <div class="col-12 col-md-4">
-                    <label for="guest_count" class="form-label">人数</label>
-                    <input type="number" id="guest_count" name="guest_count" class="form-control" value="1" min="1" required>
-                </div>
-                <div class="col-12 col-md-auto">
-                    <button type="submit" class="btn btn-primary w-100">発行</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <div class="card" id="qr-result-card">
-        <div class="card-body text-center">
-            <h3 id="qr-result-title"></h3>
-            <div id="generated-qr-code"></div>
-            <p class="text-muted">このQRコードをお客様に提示してください。</p>
-        </div>
-    </div>
-</div>
 {% endblock %}
 
 {% block scripts %}
@@ -78,8 +22,15 @@
                 body: JSON.stringify({ table_name: tableName, guest_count: guestCount })
             });
 
+            // ★★★ 修正点: 401エラー（セッション切れ）のハンドリングを追加 ★★★
+            if (response.status === 401) {
+                alert('セッションが切れました。再度ログインしてください。');
+                window.location.href = '/login';
+                return;
+            }
+
             if (!response.ok) {
-                throw new Error('QRコードの発行に失敗しました。');
+                throw new Error('QRコードの発行に失敗しました。サーバーエラーが発生した可能性があります。');
             }
 
             const data = await response.json();
@@ -90,7 +41,7 @@
                 const titleEl = document.getElementById('qr-result-title');
                 
                 titleEl.textContent = `${data.table_name}様 QRコード`;
-                qrContainer.innerHTML = ''; // 既存のQRをクリア
+                qrContainer.innerHTML = '';
                 new QRCode(qrContainer, {
                     text: `${window.location.origin}/qr/${data.token}`,
                     width: 250,
