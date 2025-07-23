@@ -6,7 +6,7 @@ from flask import Flask, render_template, request, redirect, url_for, jsonify, f
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from sqlalchemy import func, desc
+from sqlalchemy import func, desc, inspect
 import pytz
 from collections import defaultdict
 
@@ -80,7 +80,7 @@ def index():
 @app.route('/qr/<token>')
 def qr_auth(token):
     table = Table.query.filter_by(active_qr_token=token).first()
-    if not table or table.qr_token_expiry < datetime.datetime.now(JST):
+    if not table or (table.qr_token_expiry and table.qr_token_expiry < datetime.datetime.now(JST)):
         flash('QRコードが無効か期限切れです。', 'danger')
         return redirect(url_for('index'))
     
@@ -92,7 +92,8 @@ def qr_auth(token):
 
 @app.route('/table/<int:table_id>')
 def table_menu(table_id):
-    if session.get('table_id') != table_id and not current_user.is_authenticated:
+    is_admin = current_user.is_authenticated
+    if not is_admin and session.get('table_id') != table_id:
         abort(403)
     table = db.session.get(Table, table_id)
     if not table: abort(404)
@@ -110,6 +111,7 @@ def login():
         user = User.query.filter_by(username=request.form['username']).first()
         if user and user.check_password(request.form['password']):
             login_user(user, remember=('remember_me' in request.form))
+            session['logged_in'] = True
             return redirect(url_for('dashboard'))
         flash('ユーザー名またはパスワードが違います。', 'error')
     return render_template('login.html')
@@ -118,12 +120,19 @@ def login():
 @login_required
 def logout():
     logout_user()
+    session.clear()
     return redirect(url_for('login'))
 
 @app.route('/kitchen')
 @login_required
 def kitchen():
-    return render_template('kitchen.html')
+    stats = {
+        "pending_orders": Order.query.filter_by(status='pending').count(),
+        "preparing_orders": Order.query.filter_by(status='cooking').count(),
+        "ready_orders": Order.query.filter_by(status='served').count(),
+        "total_orders": Order.query.filter(Order.timestamp >= datetime.datetime.now(JST).replace(hour=0, minute=0, second=0)).count()
+    }
+    return render_template('kitchen.html', stats=stats)
 
 @app.route('/dashboard')
 @login_required
@@ -145,6 +154,11 @@ def admin_tables():
 @login_required
 def admin_history():
     return render_template('admin_history.html', tables=Table.query.order_by(Table.name).all())
+
+@app.route('/admin/guidance')
+@login_required
+def admin_guidance():
+    return render_template('admin_guidance.html')
 
 # --- APIエンドポイント ---
 @app.route('/api/tables', methods=['POST'])
@@ -186,9 +200,103 @@ def api_generate_qr(table_id):
         expiry=table.qr_token_expiry.strftime('%Y-%m-%d %H:%M:%S')
     )
 
+@app.route('/api/order/submit', methods=['POST'])
+def submit_order():
+    data = request.get_json()
+    table = db.session.get(Table, data.get('table_id'))
+    if not table: return jsonify(success=False, message="テーブル情報がありません。"), 400
+    
+    session_id = secrets.token_hex(16)
+    
+    for item_id, item_data in data.get('items', {}).items():
+        menu_item = db.session.get(MenuItem, int(item_id))
+        if menu_item:
+            menu_item.popularity_count += item_data['quantity']
+            for _ in range(item_data['quantity']):
+                db.session.add(Order(item_name=item_data['name'], item_price=item_data['price'], table_id=table.id, session_id=session_id))
+    db.session.commit()
+    return jsonify(success=True)
+
+@app.route('/api/kitchen/orders')
+@login_required
+def api_kitchen_orders():
+    active_orders_query = Order.query.filter(Order.status.in_(['pending', 'cooking', 'served'])).order_by(Order.timestamp).all()
+    orders_by_session = defaultdict(list)
+    for order in active_orders_query:
+        orders_by_session[order.session_id].append(order)
+
+    orders_data = []
+    for session_id, items in orders_by_session.items():
+        if not items: continue
+        aggregated_items = defaultdict(lambda: {'quantity': 0, 'notes': ''})
+        for item in items: aggregated_items[item.item_name]['quantity'] += 1
+        
+        statuses = {item.status for item in items}
+        status_priority = ['pending', 'cooking', 'served']
+        group_status = 'served'
+        for s in status_priority:
+            if s in statuses:
+                group_status = s
+                break
+        
+        status_map_js = {'pending': 'pending', 'cooking': 'preparing', 'served': 'ready'}
+
+        orders_data.append({
+            'id': session_id,
+            'table_number': items[0].table.name,
+            'created_at': items[0].timestamp.isoformat(),
+            'status': status_map_js.get(group_status, 'pending'),
+            'items': [{'name': name, 'quantity': data['quantity'], 'notes': data['notes']} for name, data in aggregated_items.items()]
+        })
+
+    stats = {
+        "pending_orders": Order.query.filter_by(status='pending').count(),
+        "preparing_orders": Order.query.filter_by(status='cooking').count(),
+        "ready_orders": Order.query.filter_by(status='served').count(),
+        "total_orders": Order.query.filter(Order.timestamp >= datetime.datetime.now(JST).replace(hour=0, minute=0, second=0)).count()
+    }
+    return jsonify(success=True, orders=orders_data, stats=stats)
+
+@app.route('/api/stats/dashboard')
+@login_required
+def api_stats_dashboard():
+    today = datetime.datetime.now(JST).date()
+    start_of_day = datetime.datetime.combine(today, datetime.time.min, tzinfo=JST)
+    sales = db.session.query(func.sum(Order.item_price)).filter(Order.timestamp >= start_of_day).scalar() or 0
+    count = Order.query.filter(Order.timestamp >= start_of_day).count()
+    tables = {row[0]: row[1] for row in db.session.query(Table.status, func.count(Table.id)).group_by(Table.status).all()}
+    popular = [{'name': i.name, 'count': i.popularity_count} for i in MenuItem.query.order_by(MenuItem.popularity_count.desc()).limit(5).all()]
+    return jsonify(today_sales=sales, order_count=count, table_stats=tables, popular_items=popular)
+
+@app.route('/api/dashboard/sales')
+@login_required
+def api_dashboard_sales():
+    period = request.args.get('period', 'daily')
+    labels, sales = [], []
+    today = datetime.date.today()
+    if period == 'daily':
+        for i in range(6, -1, -1):
+            day = today - datetime.timedelta(days=i)
+            day_start = datetime.datetime.combine(day, datetime.time.min, tzinfo=JST)
+            day_end = datetime.datetime.combine(day, datetime.time.max, tzinfo=JST)
+            daily_total = db.session.query(func.sum(Order.item_price)).filter(Order.timestamp.between(day_start, day_end)).scalar() or 0
+            labels.append(day.strftime('%m/%d'))
+            sales.append(daily_total)
+    else:
+        for i in range(5, -1, -1):
+            target_month_start_naive = (today.replace(day=1) - datetime.timedelta(days=i*30)).replace(day=1)
+            target_month_start = JST.localize(datetime.datetime.combine(target_month_start_naive, datetime.time.min))
+            next_month_start_naive = (target_month_start_naive + datetime.timedelta(days=32)).replace(day=1)
+            next_month_start = JST.localize(datetime.datetime.combine(next_month_start_naive, datetime.time.min))
+            monthly_total = db.session.query(func.sum(Order.item_price)).filter(Order.timestamp >= target_month_start, Order.timestamp < next_month_start).scalar() or 0
+            labels.append(target_month_start.strftime('%Y/%m'))
+            sales.append(monthly_total)
+    return jsonify(labels=labels, sales=sales)
+
 # --- データベース初期化コマンド ---
 @app.cli.command("init-db")
 def init_db_command():
+    """データベースをクリアし、初期データを投入します。"""
     with app.app_context():
         db.drop_all()
         db.create_all()
@@ -200,4 +308,16 @@ def init_db_command():
         print("データベースが初期化されました。")
 
 if __name__ == '__main__':
+    with app.app_context():
+        from sqlalchemy import inspect
+        inspector = inspect(db.engine)
+        if not inspector.has_table("user"):
+            print("INFO: First run detected. Creating database tables...")
+            db.create_all()
+            if not User.query.filter_by(username='admin').first():
+                admin_user = User(username='admin', is_admin=True)
+                admin_user.set_password('password123')
+                db.session.add(admin_user)
+                db.session.commit()
+                print("INFO: Default admin user created.")
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
