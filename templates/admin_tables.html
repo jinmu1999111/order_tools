@@ -1,56 +1,35 @@
 {% extends 'layout.html' %}
 {% block title %}卓管理{% endblock %}
-{% block extra_css %}
-<style>
-    .page-container { max-width: 1200px; margin: 0 auto; }
-    .card-header h2 { font-size: 1.8rem; margin-bottom: 0; }
-    .qr-container { min-height: 150px; display: flex; align-items: center; justify-content: center; }
-</style>
-{% endblock %}
-
+{% block extra_css %}{% endblock %}
 {% block content %}
-<div class="page-container">
+<div class="container" style="max-width: 1200px;">
     <h1 class="mb-4" style="font-size: 2.5rem;">🪑 卓管理</h1>
     <div class="card mb-4">
-        <div class="card-header bg-transparent border-0 pt-3">
-            <h2>テーブル追加</h2>
-        </div>
         <div class="card-body">
             <form id="add-table-form" class="row g-2 align-items-end">
-                <div class="col">
-                    <label for="new_table_name" class="form-label">新しいテーブル名</label>
-                    <input type="text" id="new_table_name" class="form-control" required>
-                </div>
-                <div class="col-auto">
-                    <button type="submit" class="btn btn-primary">追加</button>
-                </div>
+                <div class="col"><input type="text" id="new_table_name" class="form-control" placeholder="新しいテーブル名" required></div>
+                <div class="col-auto"><button type="submit" class="btn btn-primary">追加</button></div>
             </form>
         </div>
     </div>
-
-    <div class="row">
+    <div class="row" id="tables-grid">
         {% for table in tables %}
-        <div class="col-md-6 col-lg-4 mb-4">
-            <div class="card h-100" id="table-card-{{ table.id }}">
-                <div class="card-header d-flex justify-content-between align-items-center bg-transparent border-0 pt-3">
-                    <h5 class="card-title mb-0">{{ table.name }}</h5>
-                    <button class="btn-close" onclick="deleteTable({{ table.id }})"></button>
+        <div class="col-md-6 col-lg-4 mb-4" id="table-card-{{ table.id }}">
+            <div class="card h-100">
+                <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">{{ table.name }}</h5>
+                    <button type="button" class="btn-close" onclick="deleteTable({{ table.id }})"></button>
                 </div>
-                <div class="card-body text-center">
-                    <div class="qr-container mb-3" id="qrcode-{{ table.id }}">
-                        <small class="text-muted">QR未生成</small>
-                    </div>
+                <div class="card-body text-center d-flex flex-column justify-content-center align-items-center">
+                    <div id="qrcode-{{ table.id }}" class="mb-2" style="min-height: 160px;"></div>
                     <small class="text-muted" id="expiry-{{ table.id }}">
-                        {% if table.qr_token_expiry %}
-                            有効期限: {{ table.qr_token_expiry.astimezone(JST).strftime('%H:%M') }}
-                        {% endif %}
+                        {% if table.qr_token_expiry %}{{ table.qr_token_expiry.astimezone(JST).strftime('有効期限: %H:%M') }}{% endif %}
                     </small>
                 </div>
-                <div class="card-footer bg-transparent border-0 p-2">
+                <div class="card-footer bg-transparent">
                     <div class="btn-group w-100">
                         <button class="btn btn-sm btn-outline-secondary" onclick="refreshToken({{ table.id }})">更新</button>
                         <button class="btn btn-sm btn-outline-secondary" onclick="enlargeQR('{{ table.name }}', '{{ table.active_qr_token }}')">拡大</button>
-                        <button class="btn btn-sm btn-outline-secondary" onclick="printQR('{{ table.name }}', '{{ table.active_qr_token }}')">印刷</button>
                     </div>
                 </div>
             </div>
@@ -58,118 +37,66 @@
         {% endfor %}
     </div>
 </div>
-
-<div class="modal fade" id="qr-modal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="qr-modal-title"></h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body d-flex justify-content-center" id="qr-modal-body"></div>
-        </div>
-    </div>
-</div>
+<div class="modal fade" id="qr-modal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="qr-modal-title"></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body d-flex justify-content-center" id="qr-modal-body"></div></div></div></div>
 {% endblock %}
-
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        {% for table in tables %}
-            {% if table.active_qr_token %}
-                generateQRCode({{ table.id }}, '{{ table.active_qr_token }}');
-            {% endif %}
-        {% endfor %}
-    });
-    function generateQRCode(tableId, token, size = 150, containerId = `qrcode-${tableId}`) {
+    const handleApiError = (response) => {
+        if (response.status === 401) {
+            alert('セッションが切れました。再度ログインしてください。');
+            window.location.href = '/login';
+            return true;
+        }
+        return false;
+    };
+    function generateQRCode(containerId, token, size = 150) {
         const qrContainer = document.getElementById(containerId);
         if (!qrContainer) return;
         qrContainer.innerHTML = '';
-        new QRCode(qrContainer, { text: `${window.location.origin}/qr/${token}`, width: size, height: size });
+        new QRCode(qrContainer, { text: `${window.location.origin}/qr/${token}`, width: size, height: size, correctLevel: QRCode.CorrectLevel.H });
     }
     async function refreshToken(tableId) {
         try {
             const response = await fetch(`/api/qr/generate/${tableId}`, { method: 'POST' });
-            if (response.status === 401) {
-                alert('セッションが切れました。再度ログインしてください。');
-                window.location.href = '/login';
-                return;
-            }
+            if (handleApiError(response)) return;
             const data = await response.json();
-            if (response.ok && data.success) {
-                generateQRCode(tableId, data.token);
-                document.getElementById(`expiry-${tableId}`).textContent = `有効期限: ${new Date(data.expiry).toLocaleTimeString('ja-JP', {hour: '2-digit', minute:'2-digit'})}`;
-                const card = document.getElementById(`table-card-${tableId}`);
-                const tableName = card.querySelector('.card-title').textContent;
-                card.querySelector(`[onclick^="enlargeQR"]`).setAttribute('onclick', `enlargeQR('${tableName}', '${data.token}')`);
-                card.querySelector(`[onclick^="printQR"]`).setAttribute('onclick', `printQR('${tableName}', '${data.token}')`);
-            } else {
-                throw new Error(data.message || 'QRコードの更新に失敗しました。');
-            }
-        } catch(error) {
-            alert(error.message);
-        }
+            if (!response.ok || !data.success) throw new Error(data.message || 'QRコードの更新に失敗しました。');
+            generateQRCode(`qrcode-${tableId}`, data.token);
+            document.getElementById(`expiry-${tableId}`).textContent = `有効期限: ${new Date(data.expiry).toLocaleTimeString('ja-JP', {hour: '2-digit', minute:'2-digit'})}`;
+            const card = document.getElementById(`table-card-${tableId}`);
+            const tableName = card.querySelector('h5').textContent;
+            card.querySelector(`[onclick^="enlargeQR"]`).setAttribute('onclick', `enlargeQR('${tableName}', '${data.token}')`);
+        } catch(error) { alert(error.message); }
+    }
+    async function deleteTable(tableId) {
+        if (!confirm('本当にこのテーブルを削除しますか？')) return;
+        try {
+            const response = await fetch(`/api/tables/${tableId}`, { method: 'DELETE' });
+            if (handleApiError(response)) return;
+            if (!response.ok) throw new Error('テーブルの削除に失敗しました。');
+            document.getElementById(`table-card-${tableId}`).remove();
+        } catch (error) { alert(error.message); }
     }
     document.getElementById('add-table-form').addEventListener('submit', async function(e) {
         e.preventDefault();
         const name = document.getElementById('new_table_name').value;
         try {
-            const response = await fetch('/api/tables', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: name })
-            });
-            if (response.status === 401) {
-                alert('セッションが切れました。再度ログインしてください。');
-                window.location.href = '/login';
-                return;
-            }
+            const response = await fetch('/api/tables', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+            if (handleApiError(response)) return;
             const data = await response.json();
-            if (response.ok && data.success) {
-                location.reload();
-            } else {
-                throw new Error(data.message || 'テーブルの追加に失敗しました。');
-            }
-        } catch (error) {
-            alert(error.message);
-        }
+            if (!response.ok || !data.success) throw new Error(data.message || 'テーブルの追加に失敗しました。');
+            location.reload();
+        } catch (error) { alert(error.message); }
     });
-    async function deleteTable(tableId) {
-        if (!confirm('本当にこのテーブルを削除しますか？')) return;
-        try {
-            const response = await fetch(`/api/tables/${tableId}`, { method: 'DELETE' });
-            if (response.status === 401) {
-                alert('セッションが切れました。再度ログインしてください。');
-                window.location.href = '/login';
-                return;
-            }
-            if (response.ok) {
-                document.getElementById(`table-card-${tableId}`).remove();
-            } else {
-                throw new Error('テーブルの削除に失敗しました。');
-            }
-        } catch (error) {
-            alert(error.message);
-        }
-    }
     function enlargeQR(tableName, token) {
         if (!token || token === 'None') { alert('先にQRコードを生成・更新してください。'); return; }
         document.getElementById('qr-modal-title').textContent = `${tableName} QRコード`;
-        generateQRCode(null, token, 300, 'qr-modal-body');
+        generateQRCode('qr-modal-body', token, 300);
         new bootstrap.Modal(document.getElementById('qr-modal')).show();
     }
-    function printQR(tableName, token) {
-        if (!token || token === 'None') { alert('先にQRコードを生成・更新してください。'); return; }
-        const printWindow = window.open('', '_blank');
-        printWindow.document.write(`<html><head><title>${tableName} QRコード</title><style>body{text-align:center;margin-top:50px;} h1{font-family:sans-serif;}</style></head><body>`);
-        printWindow.document.write(`<h1>${tableName}</h1>`);
-        const container = printWindow.document.createElement('div');
-        new QRCode(container, { text: `${window.location.origin}/qr/${token}`, width: 400, height: 400 });
-        printWindow.document.body.appendChild(container);
-        printWindow.document.write('</body></html>');
-        printWindow.document.close();
-        setTimeout(() => { printWindow.print(); }, 500);
-    }
+    document.addEventListener('DOMContentLoaded', () => {
+        {% for table in tables %}{% if table.active_qr_token %}generateQRCode('qrcode-{{ table.id }}', '{{ table.active_qr_token }}');{% endif %}{% endfor %}
+    });
 </script>
 {% endblock %}
