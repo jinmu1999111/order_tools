@@ -6,8 +6,9 @@
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="mb-0" style="font-size: 2.5rem;">📊 管理ダッシュボード</h1>
+        
         <button class="btn btn-danger" id="reset-sales-btn">
-            <i class="bi bi-trash"></i> 売上リセット
+            <i class="bi bi-trash"></i> 売上・トレンドリセット
         </button>
     </div>
 
@@ -149,7 +150,7 @@
     }
 
     async function resetSalesData() {
-        if (!confirm('本当に全ての売上データをリセットしますか？\nこの操作は取り消せません。全ての注文履歴が削除されます。')) {
+        if (!confirm('本当に全ての売上・トレンドデータをリセットしますか？\nこの操作は取り消せません。全ての注文履歴が削除されます。')) {
             return;
         }
 

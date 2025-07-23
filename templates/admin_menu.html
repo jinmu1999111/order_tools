@@ -5,12 +5,32 @@
 <style>
     .page-container { max-width: 1200px; margin: 0 auto; }
     .card-header h2 { font-size: 1.8rem; margin-bottom: 0; }
+    .category-block { margin-bottom: 2rem; }
+    .category-title {
+        font-size: 1.5rem;
+        border-bottom: 2px solid var(--color-primary);
+        padding-bottom: 0.5rem;
+        margin-bottom: 1rem;
+    }
+    .sortable-item {
+        cursor: grab;
+        user-select: none;
+    }
+    .sortable-ghost {
+        background-color: #e8f0fe;
+        opacity: 0.8;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="page-container">
-    <h1 class="mb-4" style="font-size: 2.5rem;">🍔 メニュー管理</h1>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mb-0" style="font-size: 2.5rem;">🍔 メニュー管理</h1>
+        <button class="btn btn-success" id="save-order-btn">
+            <i class="bi bi-check-lg"></i> 並び順を保存
+        </button>
+    </div>
 
     <div class="card mb-4">
         <div class="card-header bg-transparent border-0 pt-3">
@@ -39,49 +59,86 @@
 
     <div class="card">
         <div class="card-header bg-transparent border-0 pt-3">
-            <h2>メニュー一覧</h2>
+            <h2>メニュー一覧 (ドラッグ＆ドロップで並び替え)</h2>
         </div>
         <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-hover align-middle">
-                    <thead>
-                        <tr>
-                            <th>メニュー名</th>
-                            <th>価格</th>
-                            <th>カテゴリ</th>
-                            <th>表示状態</th>
-                            <th class="text-end">操作</th>
-                        </tr>
-                    </thead>
-                    <tbody id="menu-table-body">
-                        {% for item in menu_items %}
-                        <tr id="item-row-{{ item.id }}">
-                            <td>{{ item.name }}</td>
-                            <td>¥{{ item.price | int }}</td>
-                            <td>{{ item.category }}</td>
-                            <td>
-                                <span class="badge {% if item.active %}bg-success{% else %}bg-secondary{% endif %}">
-                                    {% if item.active %}表示中{% else %}非表示{% endif %}
-                                </span>
-                            </td>
-                            <td class="text-end">
-                                <div class="btn-group" role="group">
-                                    <button class="btn btn-sm btn-outline-secondary" onclick="toggleActive({{ item.id }})">切替</button>
-                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteItem({{ item.id }})">削除</button>
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+            {% for category, items in categorized_items.items() %}
+                <div class="category-block">
+                    <h3 class="category-title">{{ category }}</h3>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50px;"></th>
+                                    <th>メニュー名</th>
+                                    <th>価格</th>
+                                    <th>表示状態</th>
+                                    <th class="text-end">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody class="sortable-list" id="category-{{ category|urlencode }}">
+                                {% for item in items %}
+                                <tr id="item-row-{{ item.id }}" data-id="{{ item.id }}" class="sortable-item">
+                                    <td><i class="bi bi-grip-vertical"></i></td>
+                                    <td>{{ item.name }}</td>
+                                    <td>¥{{ item.price | int }}</td>
+                                    <td>
+                                        <span class="badge {% if item.active %}bg-success{% else %}bg-secondary{% endif %}">
+                                            {% if item.active %}表示中{% else %}非表示{% endif %}
+                                        </span>
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="btn-group" role="group">
+                                            <button class="btn btn-sm btn-outline-secondary" onclick="toggleActive({{ item.id }})">切替</button>
+                                            <button class="btn btn-sm btn-outline-danger" onclick="deleteItem({{ item.id }})">削除</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            {% endfor %}
         </div>
     </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+
 <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // すべてのカテゴリのtbodyをソート可能にする
+        document.querySelectorAll('.sortable-list').forEach(list => {
+            new Sortable(list, {
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                handle: '.bi-grip-vertical',
+            });
+        });
+
+        // 「並び順を保存」ボタンの処理
+        document.getElementById('save-order-btn').addEventListener('click', async function() {
+            const allItems = document.querySelectorAll('.sortable-item');
+            const itemIds = Array.from(allItems).map(item => item.dataset.id);
+
+            const response = await fetch('/api/menu/order', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ item_ids: itemIds })
+            });
+
+            if (response.ok) {
+                alert('メニューの並び順を保存しました。');
+            } else {
+                alert('並び順の保存に失敗しました。');
+            }
+        });
+    });
+
+    // 既存のJavaScript関数
     document.getElementById('add-menu-form').addEventListener('submit', async function(e) {
         e.preventDefault();
         const form = e.target;
