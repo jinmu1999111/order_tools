@@ -55,10 +55,6 @@
         z-index: 999;
         border: 3px solid white;
     }
-    .cart-sidebar {
-        background-color: rgba(249, 245, 240, 0.95);
-        backdrop-filter: blur(5px);
-    }
 </style>
 {% endblock %}
 
@@ -94,22 +90,107 @@
     {% endfor %}
 </div>
 
-<button class="floating-cart-btn btn" onclick="toggleCart()">
+<button class="floating-cart-btn btn" data-bs-toggle="offcanvas" data-bs-target="#cart-sidebar" aria-controls="cart-sidebar">
     <i class="bi bi-basket3-fill"></i>
     <span class="badge bg-danger rounded-pill position-absolute top-0 start-100 translate-middle" id="cart-count" style="display: none;"></span>
 </button>
 
-<div class="cart-sidebar offcanvas offcanvas-end" tabindex="-1" id="cart-sidebar">
+<div class="offcanvas offcanvas-end" tabindex="-1" id="cart-sidebar" aria-labelledby="cart-sidebar-label">
     <div class="offcanvas-header border-bottom">
-        <h5 class="offcanvas-title">ご注文内容</h5>
+        <h5 class="offcanvas-title" id="cart-sidebar-label">ご注文内容</h5>
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
     </div>
     <div class="offcanvas-body" id="cart-items">
         <p class="text-center text-muted p-4">カートは空です。</p>
     </div>
-    <div class="p-3 border-top">
+    <div class="p-3 border-top bg-light">
         <h4>合計: <span id="total">¥0</span></h4>
         <button class="btn btn-success btn-lg w-100" onclick="submitOrder()" id="submit-order-btn" disabled>注文を確定する</button>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let cart = {};
+    const tableId = {{ table.id }};
+
+    function changeQuantity(itemId, change) {
+        const qtyEl = document.getElementById(`qty-${itemId}`);
+        let qty = parseInt(qtyEl.textContent) + change;
+        if (qty < 0) qty = 0;
+        qtyEl.textContent = qty;
+    }
+
+    function addToCart(itemId) {
+        const qty = parseInt(document.getElementById(`qty-${itemId}`).textContent);
+        if (qty === 0) return;
+        const itemEl = document.querySelector(`[data-item-id="${itemId}"]`);
+        const name = itemEl.dataset.itemName;
+        const price = parseInt(itemEl.dataset.itemPrice);
+        
+        // カート内の数量を直接更新するのではなく、加算する
+        if (cart[itemId]) {
+            cart[itemId].quantity += qty;
+        } else {
+            cart[itemId] = { name, price, quantity: qty };
+        }
+
+        document.getElementById(`qty-${itemId}`).textContent = 0; // 数量表示をリセット
+        updateCartDisplay();
+    }
+
+    function updateCartDisplay() {
+        const cartItemsEl = document.getElementById('cart-items');
+        const cartCountEl = document.getElementById('cart-count');
+        let totalItems = 0, totalPrice = 0, html = '';
+        
+        for (const [itemId, item] of Object.entries(cart)) {
+            totalItems += item.quantity;
+            totalPrice += item.price * item.quantity;
+            html += `<div class="p-2 border-bottom d-flex justify-content-between">
+                        <span>${item.name} x ${item.quantity}</span>
+                        <span>¥${(item.price * item.quantity).toLocaleString()}</span>
+                     </div>`;
+        }
+
+        cartItemsEl.innerHTML = html || '<p class="text-center text-muted p-4">カートは空です。</p>';
+        document.getElementById('total').textContent = `¥${totalPrice.toLocaleString()}`;
+        cartCountEl.textContent = totalItems;
+        cartCountEl.style.display = totalItems > 0 ? 'inline-block' : 'none';
+        document.getElementById('submit-order-btn').disabled = totalItems === 0;
+    }
+
+    async function submitOrder() {
+        const btn = document.getElementById('submit-order-btn');
+        btn.disabled = true;
+        btn.innerHTML = '送信中...';
+        
+        try {
+            const response = await fetch('/api/order/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ table_id: tableId, items: cart })
+            });
+            
+            if (response.ok) {
+                alert('ご注文ありがとうございます！お料理が出来上がるまで少々お待ちください。');
+                cart = {};
+                updateCartDisplay();
+                // カートを閉じる
+                const cartSidebar = bootstrap.Offcanvas.getInstance('#cart-sidebar');
+                if (cartSidebar) {
+                    cartSidebar.hide();
+                }
+            } else {
+                throw new Error('注文の送信に失敗しました。');
+            }
+        } catch (error) {
+            alert(error.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '注文を確定する';
+        }
+    }
+</script>
 {% endblock %}

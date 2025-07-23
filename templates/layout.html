@@ -15,10 +15,10 @@
     <style>
         :root {
             --font-main: 'Kiwi Maru', serif;
-            --color-background: #F9F5F0; /* 優しいクリーム色 */
-            --color-text: #5C4B3E;      /* 温かみのあるブラウン */
-            --color-primary: #D37544;   /* 落ち着いたオレンジ */
-            --color-secondary: #A98F7A;  /* アースカラー */
+            --color-background: #F9F5F0;
+            --color-text: #5C4B3E;
+            --color-primary: #D37544;
+            --color-secondary: #A98F7A;
             --color-accent: #E8A87C;
         }
 
@@ -58,6 +58,10 @@
             box-shadow: 0 4px 15px rgba(0,0,0,0.05);
             border-radius: 12px;
         }
+        
+        .offcanvas {
+             background-color: var(--color-background);
+        }
 
         .btn-primary {
             background-color: var(--color-primary);
@@ -74,10 +78,12 @@
 <body>
     <nav class="navbar navbar-expand-lg navbar-light fixed-top">
         <div class="container-fluid">
-            <a class="navbar-brand" href="{{ url_for('index') }}">Moi</a>
+            <a class="navbar-brand" href="{% if session.get('qr_token') %}{{ url_for('table_menu', table_id=session.get('table_id')) }}{% else %}{{ url_for('index') }}{% endif %}">Moi</a>
+            
             <button class="navbar-toggler" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasNavbar" aria-controls="offcanvasNavbar">
                 <span class="navbar-toggler-icon"></span>
             </button>
+
             <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasNavbar" aria-labelledby="offcanvasNavbarLabel">
                 <div class="offcanvas-header">
                     <h5 class="offcanvas-title" id="offcanvasNavbarLabel">Menu</h5>
