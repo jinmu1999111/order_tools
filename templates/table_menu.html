@@ -1,639 +1,808 @@
 {% extends "layout.html" %}
-{% block title %}{{ table.name }} - 注文{% endblock %}
-{% block content %}
-<div class="container-fluid">
-    <!-- ヘッダー -->
-    <div class="row mb-3">
-        <div class="col-12">
-            <div class="card bg-primary text-white">
-                <div class="card-body py-3">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h3 class="mb-0">
-                                <i class="bi bi-table"></i> {{ table.name }}
-                            </h3>
-                            <small>いらっしゃいませ！メニューからお選びください</small>
-                        </div>
-                        <div class="text-end">
-                            <div class="badge bg-light text-dark fs-6" id="table-status">
-                                <i class="bi bi-circle-fill text-success"></i> 利用中
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 
-    <div class="row">
-        <!-- メニュー部分 -->
-        <div class="col-lg-7 mb-4">
-            <div class="card shadow-sm">
-                <div class="card-header bg-light">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <h4 class="mb-0">
-                            <i class="bi bi-menu-button-wide"></i> メニュー
-                        </h4>
-                        <div class="btn-group btn-group-sm" role="group">
-                            <button type="button" class="btn btn-outline-primary" onclick="filterCategory('all')" id="filter-all">
-                                すべて
-                            </button>
-                            {% for category in categorized_menu.keys() %}
-                            <button type="button" class="btn btn-outline-primary" onclick="filterCategory('{{ category }}')" id="filter-{{ category }}">
-                                {{ category }}
-                            </button>
-                            {% endfor %}
-                        </div>
-                    </div>
-                </div>
-                <div class="card-body p-0">
-                    <div class="menu-container" style="max-height: 70vh; overflow-y: auto;">
-                        {% for category, items in categorized_menu.items()|sort %}
-                        <div class="category-section" data-category="{{ category }}">
-                            <div class="bg-light p-3 border-bottom">
-                                <h5 class="mb-0 text-primary">
-                                    <i class="bi bi-tag"></i> {{ category }}
-                                    <span class="badge bg-primary ms-2">{{ items|length }}品</span>
-                                </h5>
-                            </div>
-                            <div class="list-group list-group-flush">
-                                {% for item in items %}
-                                <div class="list-group-item list-group-item-action menu-item" 
-                                     data-category="{{ category }}"
-                                     onclick='addToCart({{ item|tojson|safe }})'>
-                                    <div class="d-flex justify-content-between align-items-start">
-                                        <div class="flex-grow-1">
-                                            <h6 class="mb-1 fw-bold">{{ item.name }}</h6>
-                                            {% if item.description %}
-                                            <p class="mb-1 text-muted small">{{ item.description }}</p>
-                                            {% endif %}
-                                            <small class="text-success fw-bold">
-                                                <i class="bi bi-currency-yen"></i> {{ "{:,}".format(item.price) }}
-                                            </small>
-                                        </div>
-                                        {% if item.image_url %}
-                                        <div class="ms-3">
-                                            <img src="{{ item.image_url }}" alt="{{ item.name }}" 
-                                                 class="rounded" style="width: 60px; height: 60px; object-fit: cover;">
-                                        </div>
-                                        {% endif %}
-                                        <div class="ms-3 d-flex align-items-center">
-                                            <button type="button" class="btn btn-primary btn-sm">
-                                                <i class="bi bi-plus-lg"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                                {% endfor %}
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                </div>
-            </div>
-        </div>
+{% block title %}メニュー注文 - テーブル{{ table.number }}{% endblock %}
 
-        <!-- 注文・カート部分 -->
-        <div class="col-lg-5">
-            <div class="position-sticky" style="top: 80px;">
-                <!-- カート -->
-                <div class="card shadow-sm mb-3">
-                    <div class="card-header bg-warning text-dark">
-                        <h5 class="mb-0">
-                            <i class="bi bi-cart3"></i> 今回の注文
-                            <span class="badge bg-dark ms-2" id="cart-count">0</span>
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <ul id="cart-list" class="list-group list-group-flush">
-                            <li class="list-group-item text-muted text-center py-4">
-                                <i class="bi bi-cart-x" style="font-size: 2rem;"></i>
-                                <p class="mt-2 mb-0">メニューから商品を選択してください</p>
-                            </li>
-                        </ul>
-                        
-                        <!-- 特別要望入力 -->
-                        <div class="mt-3" id="notes-section" style="display: none;">
-                            <label for="order-notes" class="form-label small">特別なご要望・アレルギー情報など</label>
-                            <textarea class="form-control form-control-sm" id="order-notes" rows="2" 
-                                      placeholder="例：辛さ控えめ、アレルギー対応など"></textarea>
-                        </div>
-                        
-                        <div class="d-grid mt-3">
-                            <button id="submit-btn" class="btn btn-success btn-lg" onclick="submitOrder()" disabled>
-                                <i class="bi bi-send"></i> この内容で注文を送信
-                                <span id="cart-total" class="ms-2">¥0</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 注文状況 -->
-                <div class="card shadow-sm">
-                    <div class="card-header bg-info text-white">
-                        <h5 class="mb-0">
-                            <i class="bi bi-clock-history"></i> 注文状況
-                            <button class="btn btn-sm btn-outline-light ms-2" onclick="updateOrderStatus()" title="更新">
-                                <i class="bi bi-arrow-clockwise"></i>
-                            </button>
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <ul id="order-list" class="list-group list-group-flush">
-                            <li class="list-group-item text-muted text-center py-3">
-                                <i class="bi bi-hourglass-split"></i>
-                                <p class="mt-1 mb-0 small">注文履歴を読み込み中...</p>
-                            </li>
-                        </ul>
-                        
-                        <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top">
-                            <h5 class="mb-0">お会計合計:</h5>
-                            <h4 class="mb-0 text-primary" id="total-price">¥0</h4>
-                        </div>
-                        
-                        <div class="mt-2">
-                            <small class="text-muted">
-                                <i class="bi bi-info-circle"></i> 
-                                お会計はお帰りの際にレジでお支払いください
-                            </small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- 注文確認モーダル -->
-<div class="modal fade" id="orderConfirmModal" tabindex="-1" aria-labelledby="orderConfirmModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="orderConfirmModalLabel">注文内容の確認</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body" id="orderConfirmBody">
-                <!-- 注文内容がここに表示される -->
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">変更する</button>
-                <button type="button" class="btn btn-success" id="confirmOrderBtn">
-                    <i class="bi bi-check-circle"></i> 注文を確定
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- 成功モーダル -->
-<div class="modal fade" id="successModal" tabindex="-1" aria-labelledby="successModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header bg-success text-white">
-                <h5 class="modal-title" id="successModalLabel">
-                    <i class="bi bi-check-circle"></i> 注文完了
-                </h5>
-            </div>
-            <div class="modal-body text-center">
-                <div class="mb-3">
-                    <i class="bi bi-check-circle-fill text-success" style="font-size: 4rem;"></i>
-                </div>
-                <h4>ご注文ありがとうございます！</h4>
-                <p class="mb-0">キッチンに注文が送信されました。<br>調理完了までしばらくお待ちください。</p>
-            </div>
-            <div class="modal-footer justify-content-center">
-                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
-                    <i class="bi bi-arrow-left"></i> メニューに戻る
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
+{% block extra_css %}
+<style>
+    .menu-header {
+        background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+        color: white;
+        padding: 2rem 0;
+        margin-bottom: 2rem;
+    }
+    
+    .table-info {
+        background: rgba(255,255,255,0.2);
+        border-radius: 10px;
+        padding: 1rem;
+        text-align: center;
+        backdrop-filter: blur(10px);
+    }
+    
+    .category-nav {
+        background: white;
+        border-radius: 10px;
+        padding: 1rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        position: sticky;
+        top: 80px;
+        z-index: 100;
+    }
+    
+    .category-btn {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        color: #495057;
+        padding: 0.75rem 1.5rem;
+        margin: 0.25rem;
+        border-radius: 25px;
+        font-weight: 500;
+        transition: all 0.3s ease;
+        text-decoration: none;
+        display: inline-block;
+    }
+    
+    .category-btn:hover,
+    .category-btn.active {
+        background: #ff6b6b;
+        color: white;
+        text-decoration: none;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(255, 107, 107, 0.3);
+    }
+    
+    .menu-section {
+        margin-bottom: 3rem;
+    }
+    
+    .section-title {
+        font-size: 1.8rem;
+        font-weight: bold;
+        color: #333;
+        margin-bottom: 1.5rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 3px solid #ff6b6b;
+        display: flex;
+        align-items: center;
+    }
+    
+    .section-icon {
+        margin-right: 0.5rem;
+        color: #ff6b6b;
+    }
+    
+    .menu-item {
+        background: white;
+        border-radius: 15px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+        border: 1px solid #f0f0f0;
+    }
+    
+    .menu-item:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    
+    .menu-item-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 1rem;
+    }
+    
+    .item-name {
+        font-size: 1.3rem;
+        font-weight: bold;
+        color: #333;
+        margin-bottom: 0.5rem;
+    }
+    
+    .item-price {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #ff6b6b;
+        white-space: nowrap;
+    }
+    
+    .item-description {
+        color: #666;
+        line-height: 1.5;
+        margin-bottom: 1rem;
+    }
+    
+    .item-badges {
+        margin-bottom: 1rem;
+    }
+    
+    .badge {
+        margin-right: 0.5rem;
+        padding: 0.4rem 0.8rem;
+        font-size: 0.8rem;
+    }
+    
+    .badge-spicy {
+        background-color: #ff4757;
+        color: white;
+    }
+    
+    .badge-vegetarian {
+        background-color: #2ed573;
+        color: white;
+    }
+    
+    .badge-popular {
+        background-color: #ffa502;
+        color: white;
+    }
+    
+    .badge-new {
+        background-color: #3742fa;
+        color: white;
+    }
+    
+    .quantity-controls {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 1rem;
+    }
+    
+    .quantity-input {
+        display: flex;
+        align-items: center;
+        background: #f8f9fa;
+        border-radius: 25px;
+        padding: 0.5rem;
+    }
+    
+    .qty-btn {
+        background: #ff6b6b;
+        color: white;
+        border: none;
+        width: 35px;
+        height: 35px;
+        border-radius: 50%;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    .qty-btn:hover {
+        background: #ff5252;
+        transform: scale(1.1);
+    }
+    
+    .qty-btn:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+        transform: none;
+    }
+    
+    .qty-display {
+        min-width: 60px;
+        text-align: center;
+        font-weight: bold;
+        font-size: 1.1rem;
+        margin: 0 1rem;
+    }
+    
+    .add-to-cart-btn {
+        background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+        color: white;
+        border: none;
+        padding: 0.75rem 1.5rem;
+        border-radius: 25px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        min-width: 120px;
+    }
+    
+    .add-to-cart-btn:hover {
+        transform: scale(1.05);
+        box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
+    }
+    
+    .cart-sidebar {
+        position: fixed;
+        right: -400px;
+        top: 0;
+        width: 400px;
+        height: 100vh;
+        background: white;
+        box-shadow: -5px 0 15px rgba(0,0,0,0.1);
+        transition: right 0.3s ease;
+        z-index: 1000;
+        overflow-y: auto;
+    }
+    
+    .cart-sidebar.active {
+        right: 0;
+    }
+    
+    .cart-header {
+        background: #ff6b6b;
+        color: white;
+        padding: 1.5rem;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    
+    .cart-content {
+        padding: 1.5rem;
+    }
+    
+    .cart-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem 0;
+        border-bottom: 1px solid #eee;
+    }
+    
+    .cart-item-info {
+        flex: 1;
+    }
+    
+    .cart-item-name {
+        font-weight: bold;
+        margin-bottom: 0.25rem;
+    }
+    
+    .cart-item-price {
+        color: #ff6b6b;
+        font-weight: bold;
+    }
+    
+    .cart-total {
+        background: #f8f9fa;
+        padding: 1.5rem;
+        margin-top: 1rem;
+        border-radius: 10px;
+        position: sticky;
+        bottom: 0;
+    }
+    
+    .floating-cart-btn {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: #ff6b6b;
+        color: white;
+        border: none;
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        font-size: 1.5rem;
+        cursor: pointer;
+        box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
+        transition: all 0.3s ease;
+        z-index: 999;
+    }
+    
+    .floating-cart-btn:hover {
+        transform: scale(1.1);
+        box-shadow: 0 6px 20px rgba(255, 107, 107, 0.6);
+    }
+    
+    .cart-badge {
+        position: absolute;
+        top: -5px;
+        right: -5px;
+        background: #ee5a24;
+        color: white;
+        border-radius: 50%;
+        width: 25px;
+        height: 25px;
+        font-size: 0.8rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+    }
+    
+    .overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        z-index: 999;
+        opacity: 0;
+        visibility: hidden;
+        transition: all 0.3s ease;
+    }
+    
+    .overlay.active {
+        opacity: 1;
+        visibility: visible;
+    }
+    
+    .order-btn {
+        background: linear-gradient(45deg, #2ed573, #1e90ff);
+        color: white;
+        border: none;
+        padding: 1rem;
+        width: 100%;
+        border-radius: 10px;
+        font-size: 1.2rem;
+        font-weight: bold;
+        margin-top: 1rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .order-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(46, 213, 115, 0.4);
+    }
+    
+    .order-btn:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+        transform: none;
+    }
+    
+    @media (max-width: 768px) {
+        .cart-sidebar {
+            width: 100%;
+            right: -100%;
+        }
+        
+        .menu-item {
+            padding: 1rem;
+        }
+        
+        .item-name {
+            font-size: 1.1rem;
+        }
+        
+        .category-nav {
+            top: 60px;
+            padding: 0.5rem;
+        }
+        
+        .category-btn {
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+        }
+    }
+    
+    .loading {
+        opacity: 0.6;
+        pointer-events: none;
+    }
+    
+    .success-message {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: #2ed573;
+        color: white;
+        padding: 2rem;
+        border-radius: 15px;
+        text-align: center;
+        z-index: 2000;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    }
+</style>
 {% endblock %}
 
-{% block scripts %}
-<script>
-const TABLE_ID = {{ table.id }};
-let cart = [];
-let currentFilter = 'all';
+{% block content %}
+<!-- メニューヘッダー -->
+<div class="menu-header">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <h1>
+                    <i class="fas fa-utensils me-3"></i>
+                    レストランメニュー
+                </h1>
+                <p class="mb-0">お好きな料理をお選びください</p>
+            </div>
+            <div class="col-md-4">
+                <div class="table-info">
+                    <h3 class="mb-1">
+                        <i class="fas fa-chair me-2"></i>
+                        テーブル {{ table.number }}
+                    </h3>
+                    <p class="mb-0">{{ table.seats }}名様席</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
-// カートに商品を追加
-function addToCart(item) {
-    cart.push({
-        ...item,
-        cartId: Date.now() + Math.random() // カート内でのユニークID
-    });
-    updateCartDisplay();
+<div class="container">
+    <!-- カテゴリナビゲーション -->
+    <div class="category-nav">
+        <div class="text-center">
+            <a href="#appetizers" class="category-btn" data-category="appetizers">
+                <i class="fas fa-seedling me-2"></i>前菜
+            </a>
+            <a href="#main-dishes" class="category-btn" data-category="main-dishes">
+                <i class="fas fa-hamburger me-2"></i>メイン
+            </a>
+            <a href="#pasta" class="category-btn" data-category="pasta">
+                <i class="fas fa-wine-bottle me-2"></i>パスタ
+            </a>
+            <a href="#pizza" class="category-btn" data-category="pizza">
+                <i class="fas fa-pizza-slice me-2"></i>ピザ
+            </a>
+            <a href="#desserts" class="category-btn" data-category="desserts">
+                <i class="fas fa-ice-cream me-2"></i>デザート
+            </a>
+            <a href="#drinks" class="category-btn" data-category="drinks">
+                <i class="fas fa-glass-cheers me-2"></i>ドリンク
+            </a>
+        </div>
+    </div>
     
-    // 追加アニメーション
-    showNotification(`${item.name}をカートに追加しました`, 'success');
-}
-
-// カートから商品を削除
-function removeFromCart(cartId) {
-    cart = cart.filter(item => item.cartId !== cartId);
-    updateCartDisplay();
-}
-
-// カート表示を更新
-function updateCartDisplay() {
-    const cartList = document.getElementById('cart-list');
-    const submitBtn = document.getElementById('submit-btn');
-    const cartCount = document.getElementById('cart-count');
-    const cartTotal = document.getElementById('cart-total');
-    const notesSection = document.getElementById('notes-section');
-    
-    cartCount.textContent = cart.length;
-    
-    if (cart.length === 0) {
-        cartList.innerHTML = `
-            <li class="list-group-item text-muted text-center py-4">
-                <i class="bi bi-cart-x" style="font-size: 2rem;"></i>
-                <p class="mt-2 mb-0">メニューから商品を選択してください</p>
-            </li>
-        `;
-        submitBtn.disabled = true;
-        cartTotal.textContent = '¥0';
-        notesSection.style.display = 'none';
-    } else {
-        let html = '';
-        let total = 0;
+    <!-- メニューセクション -->
+    {% for category in menu_categories %}
+    <div id="{{ category.slug }}" class="menu-section">
+        <h2 class="section-title">
+            <i class="{{ category.icon }} section-icon"></i>
+            {{ category.name }}
+        </h2>
         
-        // 同じ商品をグループ化
-        const groupedCart = {};
-        cart.forEach(item => {
-            const key = `${item.id}_${item.name}`;
-            if (!groupedCart[key]) {
-                groupedCart[key] = {
-                    ...item,
-                    quantity: 0,
-                    cartIds: []
-                };
-            }
-            groupedCart[key].quantity++;
-            groupedCart[key].cartIds.push(item.cartId);
-            total += item.price;
-        });
-        
-        Object.values(groupedCart).forEach(item => {
-            html += `
-                <li class="list-group-item">
-                    <div class="d-flex justify-content-between align-items-center">
+        <div class="row">
+            {% for item in category.items %}
+            <div class="col-lg-6 col-xl-4">
+                <div class="menu-item" data-item-id="{{ item.id }}">
+                    <div class="menu-item-header">
                         <div class="flex-grow-1">
-                            <h6 class="mb-0">${item.name}</h6>
-                            <small class="text-muted">¥${item.price.toLocaleString()} × ${item.quantity}</small>
-                        </div>
-                        <div class="d-flex align-items-center">
-                            <span class="me-2 fw-bold">¥${(item.price * item.quantity).toLocaleString()}</span>
-                            <button class="btn btn-sm btn-outline-danger" onclick="removeFromCart('${item.cartIds[0]}')" title="削除">
-                                <i class="bi bi-dash"></i>
-                            </button>
+                            <div class="item-name">{{ item.name }}</div>
+                            <div class="item-price">¥{{ "{:,}".format(item.price) }}</div>
                         </div>
                     </div>
-                </li>
-            `;
-        });
+                    
+                    <div class="item-description">
+                        {{ item.description }}
+                    </div>
+                    
+                    <div class="item-badges">
+                        {% if item.is_spicy %}
+                        <span class="badge badge-spicy">
+                            <i class="fas fa-fire me-1"></i>辛口
+                        </span>
+                        {% endif %}
+                        {% if item.is_vegetarian %}
+                        <span class="badge badge-vegetarian">
+                            <i class="fas fa-leaf me-1"></i>ベジタリアン
+                        </span>
+                        {% endif %}
+                        {% if item.is_popular %}
+                        <span class="badge badge-popular">
+                            <i class="fas fa-star me-1"></i>人気
+                        </span>
+                        {% endif %}
+                        {% if item.is_new %}
+                        <span class="badge badge-new">
+                            <i class="fas fa-plus me-1"></i>新メニュー
+                        </span>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="quantity-controls">
+                        <div class="quantity-input">
+                            <button class="qty-btn" type="button" onclick="changeQuantity('{{ item.id }}', -1)">-</button>
+                            <span class="qty-display" id="qty-{{ item.id }}">0</span>
+                            <button class="qty-btn" type="button" onclick="changeQuantity('{{ item.id }}', 1)">+</button>
+                        </div>
+                        <button class="add-to-cart-btn" onclick="addToCart('{{ item.id }}')">
+                            <i class="fas fa-cart-plus me-2"></i>カートに追加
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- フローティングカートボタン -->
+<button class="floating-cart-btn" onclick="toggleCart()">
+    <i class="fas fa-shopping-cart"></i>
+    <span class="cart-badge" id="cart-count">0</span>
+</button>
+
+<!-- カートサイドバー -->
+<div class="overlay" id="cart-overlay" onclick="toggleCart()"></div>
+<div class="cart-sidebar" id="cart-sidebar">
+    <div class="cart-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <h4 class="mb-0">
+                <i class="fas fa-shopping-cart me-2"></i>
+                注文内容
+            </h4>
+            <button class="btn btn-sm btn-light" onclick="toggleCart()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+    
+    <div class="cart-content">
+        <div id="cart-items">
+            <div class="text-center text-muted py-4">
+                <i class="fas fa-shopping-cart fa-3x mb-3"></i>
+                <p>カートが空です</p>
+            </div>
+        </div>
         
-        cartList.innerHTML = html;
-        submitBtn.disabled = false;
-        cartTotal.textContent = `¥${total.toLocaleString()}`;
-        notesSection.style.display = 'block';
+        <div class="cart-total" id="cart-total" style="display: none;">
+            <div class="d-flex justify-content-between mb-2">
+                <span>小計:</span>
+                <span id="subtotal">¥0</span>
+            </div>
+            <div class="d-flex justify-content-between mb-2">
+                <span>税込:</span>
+                <span id="total">¥0</span>
+            </div>
+            
+            <button class="order-btn" onclick="submitOrder()" id="submit-order-btn" disabled>
+                <i class="fas fa-paper-plane me-2"></i>
+                注文を確定する
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+// カートデータ
+let cart = {};
+let tableId = {{ table.id }};
+
+// 数量変更
+function changeQuantity(itemId, change) {
+    const qtyElement = document.getElementById(`qty-${itemId}`);
+    let currentQty = parseInt(qtyElement.textContent);
+    let newQty = Math.max(0, currentQty + change);
+    
+    qtyElement.textContent = newQty;
+    
+    // カートの更新
+    if (newQty > 0) {
+        updateCartItem(itemId, newQty);
+    } else {
+        removeFromCart(itemId);
     }
 }
 
-// カテゴリフィルター
-function filterCategory(category) {
-    currentFilter = category;
+// カートに追加
+function addToCart(itemId) {
+    const qty = parseInt(document.getElementById(`qty-${itemId}`).textContent);
+    if (qty > 0) {
+        updateCartItem(itemId, qty);
+        
+        // 成功フィードバック
+        showSuccess('カートに追加しました');
+    }
+}
+
+// カートアイテム更新
+function updateCartItem(itemId, quantity) {
+    const menuItem = document.querySelector(`[data-item-id="${itemId}"]`);
+    const name = menuItem.querySelector('.item-name').textContent;
+    const price = parseInt(menuItem.querySelector('.item-price').textContent.replace(/[¥,]/g, ''));
     
-    // ボタンの状態を更新
-    document.querySelectorAll('[id^="filter-"]').forEach(btn => {
-        btn.classList.remove('active');
-        btn.classList.add('btn-outline-primary');
-        btn.classList.remove('btn-primary');
-    });
-    
-    const activeBtn = document.getElementById(`filter-${category}`);
-    if (activeBtn) {
-        activeBtn.classList.add('active', 'btn-primary');
-        activeBtn.classList.remove('btn-outline-primary');
+    if (quantity > 0) {
+        cart[itemId] = {
+            name: name,
+            price: price,
+            quantity: quantity
+        };
+    } else {
+        delete cart[itemId];
     }
     
-    // メニュー項目の表示/非表示
-    document.querySelectorAll('.category-section').forEach(section => {
-        if (category === 'all' || section.dataset.category === category) {
-            section.style.display = 'block';
-        } else {
-            section.style.display = 'none';
+    updateCartDisplay();
+}
+
+// カートから削除
+function removeFromCart(itemId) {
+    delete cart[itemId];
+    document.getElementById(`qty-${itemId}`).textContent = '0';
+    updateCartDisplay();
+}
+
+// カート表示更新
+function updateCartDisplay() {
+    const cartItems = document.getElementById('cart-items');
+    const cartTotal = document.getElementById('cart-total');
+    const cartCount = document.getElementById('cart-count');
+    const submitBtn = document.getElementById('submit-order-btn');
+    
+    let totalItems = 0;
+    let subtotal = 0;
+    let html = '';
+    
+    if (Object.keys(cart).length === 0) {
+        html = `
+            <div class="text-center text-muted py-4">
+                <i class="fas fa-shopping-cart fa-3x mb-3"></i>
+                <p>カートが空です</p>
+            </div>
+        `;
+        cartTotal.style.display = 'none';
+        submitBtn.disabled = true;
+    } else {
+        for (const [itemId, item] of Object.entries(cart)) {
+            totalItems += item.quantity;
+            subtotal += item.price * item.quantity;
+            
+            html += `
+                <div class="cart-item">
+                    <div class="cart-item-info">
+                        <div class="cart-item-name">${item.name}</div>
+                        <div class="cart-item-price">¥${item.price.toLocaleString()} × ${item.quantity}</div>
+                    </div>
+                    <div class="cart-item-controls">
+                        <button class="btn btn-sm btn-outline-secondary me-2" onclick="changeQuantity('${itemId}', -1)">-</button>
+                        <button class="btn btn-sm btn-outline-secondary me-2" onclick="changeQuantity('${itemId}', 1)">+</button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="removeFromCart('${itemId}')">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
         }
-    });
+        
+        cartTotal.style.display = 'block';
+        submitBtn.disabled = false;
+    }
+    
+    cartItems.innerHTML = html;
+    cartCount.textContent = totalItems;
+    cartCount.style.display = totalItems > 0 ? 'flex' : 'none';
+    
+    const tax = Math.floor(subtotal * 0.1);
+    const total = subtotal + tax;
+    
+    document.getElementById('subtotal').textContent = `¥${subtotal.toLocaleString()}`;
+    document.getElementById('total').textContent = `¥${total.toLocaleString()}`;
+}
+
+// カート表示切り替え
+function toggleCart() {
+    const sidebar = document.getElementById('cart-sidebar');
+    const overlay = document.getElementById('cart-overlay');
+    
+    sidebar.classList.toggle('active');
+    overlay.classList.toggle('active');
 }
 
 // 注文送信
-async function submitOrder() {
-    if (cart.length === 0) {
-        alert('カートに商品がありません。');
+function submitOrder() {
+    if (Object.keys(cart).length === 0) {
+        showError('カートが空です');
         return;
     }
     
-    // 確認モーダルを表示
-    showOrderConfirmModal();
-}
-
-// 注文確認モーダルを表示
-function showOrderConfirmModal() {
-    const modalBody = document.getElementById('orderConfirmBody');
-    const notes = document.getElementById('order-notes').value;
+    const submitBtn = document.getElementById('submit-order-btn');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>注文中...';
     
-    // グループ化されたカート内容を生成
-    const groupedCart = {};
-    let total = 0;
-    
-    cart.forEach(item => {
-        const key = `${item.id}_${item.name}`;
-        if (!groupedCart[key]) {
-            groupedCart[key] = { ...item, quantity: 0 };
-        }
-        groupedCart[key].quantity++;
-        total += item.price;
-    });
-    
-    let itemsHtml = '';
-    Object.values(groupedCart).forEach(item => {
-        itemsHtml += `
-            <tr>
-                <td>${item.name}</td>
-                <td class="text-center">${item.quantity}</td>
-                <td class="text-end">¥${item.price.toLocaleString()}</td>
-                <td class="text-end fw-bold">¥${(item.price * item.quantity).toLocaleString()}</td>
-            </tr>
-        `;
-    });
-    
-    modalBody.innerHTML = `
-        <div class="mb-3">
-            <h6>ご注文内容</h6>
-            <div class="table-responsive">
-                <table class="table table-sm">
-                    <thead>
-                        <tr>
-                            <th>商品名</th>
-                            <th class="text-center">数量</th>
-                            <th class="text-end">単価</th>
-                            <th class="text-end">小計</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${itemsHtml}
-                    </tbody>
-                    <tfoot>
-                        <tr class="table-primary">
-                            <th colspan="3">合計</th>
-                            <th class="text-end">¥${total.toLocaleString()}</th>
-                        </tr>
-                    </tfoot>
-                </table>
-            </div>
-        </div>
-        ${notes ? `
-            <div class="mb-3">
-                <h6>特別なご要望</h6>
-                <div class="alert alert-info">
-                    <i class="bi bi-chat-quote"></i> ${notes}
-                </div>
-            </div>
-        ` : ''}
-        <div class="alert alert-warning">
-            <i class="bi bi-exclamation-triangle"></i>
-            注文送信後は内容の変更ができません。よろしいですか？
-        </div>
-    `;
-    
-    document.getElementById('confirmOrderBtn').onclick = confirmOrder;
-    new bootstrap.Modal(document.getElementById('orderConfirmModal')).show();
-}
-
-// 注文確定
-async function confirmOrder() {
-    const notes = document.getElementById('order-notes').value;
-    
-    try {
-        const response = await fetch('/api/order/submit', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                table_id: TABLE_ID, 
-                cart: cart,
-                notes: notes
-            })
-        });
-        
-        if (response.ok) {
-            // 確認モーダルを閉じる
-            bootstrap.Modal.getInstance(document.getElementById('orderConfirmModal')).hide();
-            
-            // 成功モーダルを表示
-            new bootstrap.Modal(document.getElementById('successModal')).show();
-            
-            // カートをクリア
-            cart = [];
+    fetch('/api/orders', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            table_id: tableId,
+            items: cart
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            cart = {};
             updateCartDisplay();
-            document.getElementById('order-notes').value = '';
+            toggleCart();
+            showSuccess('注文を受け付けました！調理開始まで少々お待ちください。');
             
-            // 注文状況を更新
-            setTimeout(() => {
-                updateOrderStatus();
-            }, 1000);
-        } else {
-            const data = await response.json();
-            alert('注文の送信に失敗しました: ' + (data.message || '不明なエラー'));
-        }
-    } catch (error) {
-        alert('エラーが発生しました: ' + error.message);
-    }
-}
-
-// 注文状況を更新
-async function updateOrderStatus() {
-    try {
-        const response = await fetch(`/api/table_status/${TABLE_ID}`);
-        const data = await response.json();
-        const orderList = document.getElementById('order-list');
-        
-        if (data.orders && data.orders.length > 0) {
-            let html = '';
-            
-            data.orders.forEach(order => {
-                let statusBadge = '';
-                let statusIcon = '';
-                
-                switch (order.status) {
-                    case 'pending':
-                        statusBadge = '<span class="badge bg-warning text-dark">調理待ち</span>';
-                        statusIcon = 'clock-history';
-                        break;
-                    case 'preparing':
-                        statusBadge = '<span class="badge bg-info">調理中</span>';
-                        statusIcon = 'fire';
-                        break;
-                    case 'ready':
-                        statusBadge = '<span class="badge bg-primary">調理完了</span>';
-                        statusIcon = 'check-circle';
-                        break;
-                    case 'served':
-                        statusBadge = '<span class="badge bg-success">提供済み</span>';
-                        statusIcon = 'check-square';
-                        break;
-                }
-                
-                html += `
-                    <li class="list-group-item">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div class="flex-grow-1">
-                                <div class="d-flex align-items-center">
-                                    <i class="bi bi-${statusIcon} me-2"></i>
-                                    <div>
-                                        <h6 class="mb-0">${order.name}</h6>
-                                        ${order.quantity > 1 ? `<small class="text-muted">× ${order.quantity}</small>` : ''}
-                                        ${order.notes ? `<div class="small text-info mt-1"><i class="bi bi-chat-quote"></i> ${order.notes}</div>` : ''}
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="text-end">
-                                ${statusBadge}
-                                <div class="small text-muted mt-1">¥${(order.price * (order.quantity || 1)).toLocaleString()}</div>
-                            </div>
-                        </div>
-                    </li>
-                `;
+            // 全ての数量をリセット
+            document.querySelectorAll('.qty-display').forEach(el => {
+                el.textContent = '0';
             });
             
-            orderList.innerHTML = html;
         } else {
-            orderList.innerHTML = `
-                <li class="list-group-item text-muted text-center py-3">
-                    <i class="bi bi-inbox"></i>
-                    <p class="mt-1 mb-0 small">まだ注文がありません</p>
-                </li>
-            `;
+            showError(data.message || '注文の送信に失敗しました');
         }
-        
-        document.getElementById('total-price').textContent = `¥${(data.total_price || 0).toLocaleString()}`;
-        
-        // テーブルステータスも更新
-        const statusElement = document.getElementById('table-status');
-        if (data.table_status) {
-            switch (data.table_status) {
-                case 'occupied':
-                    statusElement.innerHTML = '<i class="bi bi-circle-fill text-success"></i> 利用中';
-                    break;
-                case 'available':
-                    statusElement.innerHTML = '<i class="bi bi-circle-fill text-secondary"></i> 空席';
-                    break;
-                default:
-                    statusElement.innerHTML = '<i class="bi bi-circle-fill text-info"></i> ' + data.table_status;
-            }
-        }
-        
-    } catch (error) {
-        console.error('注文状況更新エラー:', error);
-    }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showError('注文の送信に失敗しました');
+    })
+    .finally(() => {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fas fa-paper-plane me-2"></i>注文を確定する';
+    });
 }
 
-// 通知表示
-function showNotification(message, type = 'info') {
-    // 簡易通知（実際の実装ではlayoutのshowNotification関数を使用）
-    const toast = document.createElement('div');
-    toast.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
-    toast.style.cssText = 'top: 80px; right: 20px; z-index: 1080; max-width: 300px;';
-    toast.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+// スムーズスクロール
+document.querySelectorAll('.category-btn').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+        e.preventDefault();
+        const targetId = this.getAttribute('href').substring(1);
+        const targetElement = document.getElementById(targetId);
+        
+        if (targetElement) {
+            const offset = 150; // ナビゲーションの高さ分
+            const elementPosition = targetElement.offsetTop;
+            const offsetPosition = elementPosition - offset;
+            
+            window.scrollTo({
+                top: offsetPosition,
+                behavior: 'smooth'
+            });
+        }
+        
+        // アクティブクラスの切り替え
+        document.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
+        this.classList.add('active');
+    });
+});
+
+// 成功メッセージ表示
+function showSuccess(message) {
+    const successDiv = document.createElement('div');
+    successDiv.className = 'success-message';
+    successDiv.innerHTML = `
+        <i class="fas fa-check-circle fa-3x mb-3"></i>
+        <h4>${message}</h4>
     `;
-    document.body.appendChild(toast);
+    
+    document.body.appendChild(successDiv);
     
     setTimeout(() => {
-        if (toast.parentNode) {
-            toast.parentNode.removeChild(toast);
+        if (successDiv.parentNode) {
+            successDiv.parentNode.removeChild(successDiv);
         }
     }, 3000);
 }
 
-// キーボードショートカット
-document.addEventListener('keydown', function(e) {
-    // Ctrl + Enter で注文送信
-    if (e.ctrlKey && e.key === 'Enter' && cart.length > 0) {
-        e.preventDefault();
-        submitOrder();
-    }
-    
-    // Escape でモーダルを閉じる
-    if (e.key === 'Escape') {
-        const modals = document.querySelectorAll('.modal.show');
-        modals.forEach(modal => {
-            bootstrap.Modal.getInstance(modal)?.hide();
-        });
-    }
-});
-
-// スワイプジェスチャー（モバイル対応）
-let startX = 0;
-let startY = 0;
-
-document.addEventListener('touchstart', function(e) {
-    startX = e.touches[0].clientX;
-    startY = e.touches[0].clientY;
-});
-
-document.addEventListener('touchend', function(e) {
-    if (!startX || !startY) return;
-    
-    const endX = e.changedTouches[0].clientX;
-    const endY = e.changedTouches[0].clientY;
-    
-    const diffX = startX - endX;
-    const diffY = startY - endY;
-    
-    // 横スワイプでカテゴリ切り替え
-    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
-        const categories = ['all', ...Object.keys({{ categorized_menu|tojson }})];
-        const currentIndex = categories.indexOf(currentFilter);
-        
-        if (diffX > 0 && currentIndex < categories.length - 1) {
-            // 左スワイプ：次のカテゴリ
-            filterCategory(categories[currentIndex + 1]);
-        } else if (diffX < 0 && currentIndex > 0) {
-            // 右スワイプ：前のカテゴリ
-            filterCategory(categories[currentIndex - 1]);
-        }
-    }
-    
-    startX = 0;
-    startY = 0;
-});
+// エラーメッセージ表示
+function showError(message) {
+    alert(message); // 簡易実装、本番では Toast 等を使用
+}
 
 // ページ読み込み時の初期化
 document.addEventListener('DOMContentLoaded', function() {
-    updateCartDisplay();
-    updateOrderStatus();
-    
-    // 定期的に注文状況を更新
-    setInterval(updateOrderStatus, 15000); // 15秒ごと
-    
-    // 初期フィルター設定
-    filterCategory('all');
-    
-    // サービスワーカー登録（オフライン対応）
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(console.error);
+    // 最初のカテゴリをアクティブにする
+    const firstCategory = document.querySelector('.category-btn');
+    if (firstCategory) {
+        firstCategory.classList.add('active');
     }
-});
-
-// ページの可視性変更時の処理
-document.addEventListener('visibilitychange', function() {
-    if (!document.hidden) {
-        // ページが表示されたら即座に注文状況を更新
-        updateOrderStatus();
-    }
+    
+    // スクロール時のカテゴリハイライト
+    window.addEventListener('scroll', function() {
+        const sections = document.querySelectorAll('.menu-section');
+        const navButtons = document.querySelectorAll('.category-btn');
+        
+        let current = '';
+        sections.forEach(section => {
+            const sectionTop = section.offsetTop - 200;
+            if (pageYOffset >= sectionTop) {
+                current = section.getAttribute('id');
+            }
+        });
+        
+        navButtons.forEach(btn => {
+            btn.classList.remove('active');
+            if (btn.getAttribute('href') === '#' + current) {
+                btn.classList.add('active');
+            }
+        });
+    });
 });
 </script>
 {% endblock %}

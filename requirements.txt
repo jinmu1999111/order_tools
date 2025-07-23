@@ -1,5 +1,56 @@
-Flask
-Flask-Login
-Flask-SQLAlchemy
-psycopg2-binary
-gunicorn
+# Flask Web Framework
+Flask==3.0.3
+Flask-SQLAlchemy==3.1.1
+Flask-Login==0.6.3
+Flask-WTF==1.2.1
+Flask-Migrate==4.0.7
+Werkzeug==3.0.3
+
+# PostgreSQL Database
+psycopg2-binary==2.9.9
+SQLAlchemy==2.0.31
+
+# Production Server
+gunicorn==22.0.0
+
+# Date and Time Handling
+pytz==2024.1
+
+# Security and Authentication
+bcrypt==4.1.3
+cryptography==42.0.8
+
+# QR Code Generation and Processing
+qrcode==7.4.2
+Pillow==10.4.0
+
+# Form Handling and Validation
+WTForms==3.1.2
+
+# Environment Variables
+python-dotenv==1.0.1
+
+# JSON Web Tokens (for API authentication)
+PyJWT==2.8.0
+
+# HTTP Requests (for external API calls)
+requests==2.32.3
+
+# Excel/CSV Export Support
+openpyxl==3.1.4
+pandas==2.2.2
+
+# Logging and Monitoring
+python-json-logger==2.0.7
+
+# Development and Testing (optional)
+pytest==8.2.2
+pytest-flask==1.3.0
+coverage==7.5.4
+
+# Code Quality (optional)
+flake8==7.1.0
+black==24.4.2
+
+# Performance Monitoring (optional)
+Flask-APM==0.3.0

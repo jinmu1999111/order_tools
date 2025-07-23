@@ -1,22 +1,453 @@
 {% extends "layout.html" %}
-{% block title %}テーブル選択{% endblock %}
+
+{% block title %}ホーム - 注文管理システム{% endblock %}
+
+{% block extra_css %}
+<style>
+    .hero-section {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 4rem 0;
+        text-align: center;
+        margin-bottom: 3rem;
+    }
+    
+    .hero-title {
+        font-size: 3rem;
+        font-weight: bold;
+        margin-bottom: 1rem;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+    
+    .hero-subtitle {
+        font-size: 1.3rem;
+        opacity: 0.9;
+        margin-bottom: 2rem;
+    }
+    
+    .feature-card {
+        background: white;
+        border-radius: 15px;
+        padding: 2rem;
+        text-align: center;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+        height: 100%;
+        border: none;
+    }
+    
+    .feature-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    }
+    
+    .feature-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        color: #667eea;
+    }
+    
+    .feature-title {
+        font-size: 1.5rem;
+        font-weight: bold;
+        margin-bottom: 1rem;
+        color: #333;
+    }
+    
+    .feature-description {
+        color: #666;
+        line-height: 1.6;
+        margin-bottom: 1.5rem;
+    }
+    
+    .btn-feature {
+        background: linear-gradient(45deg, #667eea, #764ba2);
+        border: none;
+        color: white;
+        padding: 0.75rem 2rem;
+        border-radius: 25px;
+        font-weight: 500;
+        text-decoration: none;
+        display: inline-block;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-feature:hover {
+        color: white;
+        text-decoration: none;
+        transform: scale(1.05);
+        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+    
+    .stats-section {
+        background: #f8f9fa;
+        padding: 3rem 0;
+        margin: 3rem 0;
+    }
+    
+    .stat-card {
+        text-align: center;
+        padding: 1.5rem;
+    }
+    
+    .stat-number {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #667eea;
+        display: block;
+    }
+    
+    .stat-label {
+        color: #666;
+        font-size: 1rem;
+        margin-top: 0.5rem;
+    }
+    
+    .news-section {
+        padding: 2rem 0;
+    }
+    
+    .news-item {
+        background: white;
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        border-left: 4px solid #667eea;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    }
+    
+    .news-date {
+        color: #666;
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .news-title {
+        font-weight: bold;
+        color: #333;
+        margin-bottom: 0.5rem;
+    }
+    
+    .news-content {
+        color: #666;
+        line-height: 1.5;
+    }
+    
+    .quick-actions {
+        background: white;
+        border-radius: 15px;
+        padding: 2rem;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        margin-bottom: 2rem;
+    }
+    
+    .action-btn {
+        display: flex;
+        align-items: center;
+        padding: 1rem;
+        margin: 0.5rem 0;
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        text-decoration: none;
+        color: #333;
+        transition: all 0.3s ease;
+    }
+    
+    .action-btn:hover {
+        background: #667eea;
+        color: white;
+        text-decoration: none;
+        transform: translateX(5px);
+    }
+    
+    .action-icon {
+        font-size: 1.5rem;
+        margin-right: 1rem;
+        width: 40px;
+        text-align: center;
+    }
+    
+    @media (max-width: 768px) {
+        .hero-title {
+            font-size: 2rem;
+        }
+        
+        .hero-subtitle {
+            font-size: 1.1rem;
+        }
+        
+        .feature-card {
+            margin-bottom: 2rem;
+        }
+        
+        .stat-number {
+            font-size: 2rem;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-    <div class="text-center mb-4">
-        <h1 class="display-4">テーブルを選択してください</h1>
-    </div>
-    <div class="row g-3">
-        {% for table in tables %}
-        <div class="col-md-4 col-6">
-            <a href="{{ url_for('table_menu', table_id=table.id) }}" class="d-grid text-decoration-none">
-                <button class="btn btn-primary btn-lg p-4">
-                    {{ table.name }}
-                </button>
-            </a>
+<!-- ヒーローセクション -->
+<div class="hero-section">
+    <div class="container">
+        <h1 class="hero-title">
+            <i class="fas fa-utensils me-3"></i>
+            注文管理システム
+        </h1>
+        <p class="hero-subtitle">
+            効率的な注文管理とスムーズなオペレーションを実現
+        </p>
+        <div class="row justify-content-center mt-4">
+            <div class="col-md-3 col-6 mb-2">
+                <a href="{{ url_for('main.table_menu') }}" class="btn btn-light btn-lg w-100">
+                    <i class="fas fa-qrcode d-block mb-2"></i>
+                    QR注文
+                </a>
+            </div>
+            <div class="col-md-3 col-6 mb-2">
+                <a href="{{ url_for('main.kitchen') }}" class="btn btn-light btn-lg w-100">
+                    <i class="fas fa-fire d-block mb-2"></i>
+                    キッチン
+                </a>
+            </div>
         </div>
-        {% else %}
-        <div class="col-12">
-            <p class="text-center text-muted">テーブルがまだ登録されていません。管理者画面から追加してください。</p>
-        </div>
-        {% endfor %}
     </div>
+</div>
+
+<div class="container">
+    <!-- 機能カード -->
+    <div class="row mb-5">
+        <div class="col-lg-4 col-md-6 mb-4">
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="fas fa-mobile-alt"></i>
+                </div>
+                <h3 class="feature-title">QRコード注文</h3>
+                <p class="feature-description">
+                    テーブルのQRコードをスキャンして、スマートフォンから簡単に注文できます。
+                </p>
+                <a href="{{ url_for('main.table_menu') }}" class="btn-feature">
+                    注文開始
+                </a>
+            </div>
+        </div>
+        
+        <div class="col-lg-4 col-md-6 mb-4">
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="fas fa-fire"></i>
+                </div>
+                <h3 class="feature-title">キッチン管理</h3>
+                <p class="feature-description">
+                    リアルタイムで注文状況を確認し、効率的な調理管理を実現します。
+                </p>
+                <a href="{{ url_for('main.kitchen') }}" class="btn-feature">
+                    キッチン画面
+                </a>
+            </div>
+        </div>
+        
+        <div class="col-lg-4 col-md-6 mb-4">
+            <div class="feature-card">
+                <div class="feature-icon">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <h3 class="feature-title">売上分析</h3>
+                <p class="feature-description">
+                    詳細な売上データと分析レポートで、経営判断をサポートします。
+                </p>
+                {% if current_user.is_authenticated and current_user.is_admin %}
+                <a href="{{ url_for('admin.dashboard') }}" class="btn-feature">
+                    ダッシュボード
+                </a>
+                {% else %}
+                <a href="{{ url_for('main.login') }}" class="btn-feature">
+                    ログイン
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- 統計情報 -->
+    <div class="stats-section">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-3 col-6">
+                    <div class="stat-card">
+                        <span class="stat-number" id="daily-orders">{{ stats.daily_orders or 0 }}</span>
+                        <div class="stat-label">今日の注文数</div>
+                    </div>
+                </div>
+                <div class="col-md-3 col-6">
+                    <div class="stat-card">
+                        <span class="stat-number" id="active-tables">{{ stats.active_tables or 0 }}</span>
+                        <div class="stat-label">利用中テーブル</div>
+                    </div>
+                </div>
+                <div class="col-md-3 col-6">
+                    <div class="stat-card">
+                        <span class="stat-number" id="pending-orders">{{ stats.pending_orders or 0 }}</span>
+                        <div class="stat-label">調理待ち</div>
+                    </div>
+                </div>
+                <div class="col-md-3 col-6">
+                    <div class="stat-card">
+                        <span class="stat-number">¥{{ "{:,}".format(stats.daily_revenue or 0) }}</span>
+                        <div class="stat-label">今日の売上</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row">
+        <!-- クイックアクション -->
+        <div class="col-lg-8">
+            <div class="quick-actions">
+                <h4 class="mb-3">
+                    <i class="fas fa-bolt me-2 text-primary"></i>
+                    クイックアクション
+                </h4>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <a href="{{ url_for('main.table_menu') }}" class="action-btn">
+                            <div class="action-icon">
+                                <i class="fas fa-qrcode"></i>
+                            </div>
+                            <div>
+                                <strong>新規注文</strong><br>
+                                <small class="text-muted">QRコードで注文開始</small>
+                            </div>
+                        </a>
+                        
+                        <a href="{{ url_for('main.kitchen') }}" class="action-btn">
+                            <div class="action-icon">
+                                <i class="fas fa-fire"></i>
+                            </div>
+                            <div>
+                                <strong>キッチン画面</strong><br>
+                                <small class="text-muted">注文管理・調理状況</small>
+                            </div>
+                        </a>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        {% if current_user.is_authenticated and current_user.is_admin %}
+                        <a href="{{ url_for('admin.dashboard') }}" class="action-btn">
+                            <div class="action-icon">
+                                <i class="fas fa-tachometer-alt"></i>
+                            </div>
+                            <div>
+                                <strong>管理画面</strong><br>
+                                <small class="text-muted">売上・設定管理</small>
+                            </div>
+                        </a>
+                        {% endif %}
+                        
+                        <a href="#" class="action-btn" onclick="refreshStats()">
+                            <div class="action-icon">
+                                <i class="fas fa-sync-alt"></i>
+                            </div>
+                            <div>
+                                <strong>データ更新</strong><br>
+                                <small class="text-muted">最新情報を取得</small>
+                            </div>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- お知らせ -->
+        <div class="col-lg-4">
+            <div class="news-section">
+                <h4 class="mb-3">
+                    <i class="fas fa-bell me-2 text-info"></i>
+                    お知らせ
+                </h4>
+                
+                {% if news and news|length > 0 %}
+                    {% for item in news[:3] %}
+                    <div class="news-item">
+                        <div class="news-date">{{ item.date.strftime('%Y年%m月%d日') }}</div>
+                        <div class="news-title">{{ item.title }}</div>
+                        <div class="news-content">{{ item.content[:100] }}{% if item.content|length > 100 %}...{% endif %}</div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                <div class="news-item">
+                    <div class="news-date">{{ current_date }}</div>
+                    <div class="news-title">システム稼働中</div>
+                    <div class="news-content">注文管理システムが正常に稼働しています。</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- リアルタイム更新用JavaScript -->
+<script>
+// 統計情報の自動更新
+function refreshStats() {
+    fetch('/api/stats')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('daily-orders').textContent = data.daily_orders || 0;
+            document.getElementById('active-tables').textContent = data.active_tables || 0;
+            document.getElementById('pending-orders').textContent = data.pending_orders || 0;
+            
+            // 成功メッセージ表示
+            showAlert('データを更新しました', 'success');
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            showAlert('データの更新に失敗しました', 'error');
+        });
+}
+
+// 5分ごとに自動更新
+setInterval(refreshStats, 300000);
+
+// アラート表示関数
+function showAlert(message, type) {
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show position-fixed`;
+    alertDiv.style.top = '20px';
+    alertDiv.style.right = '20px';
+    alertDiv.style.zIndex = '9999';
+    alertDiv.style.minWidth = '300px';
+    
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(alertDiv);
+    
+    // 3秒後に自動削除
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.parentNode.removeChild(alertDiv);
+        }
+    }, 3000);
+}
+
+// ページ読み込み時の初期化
+document.addEventListener('DOMContentLoaded', function() {
+    // 統計情報を初回読み込み
+    refreshStats();
+    
+    // サービスワーカーの登録（オフライン対応）
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/static/sw.js')
+            .then(registration => console.log('SW registered'))
+            .catch(error => console.log('SW registration failed'));
+    }
+});
+</script>
 {% endblock %}
