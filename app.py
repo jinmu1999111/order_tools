@@ -56,7 +56,8 @@ class Table(db.Model):
     name = db.Column(db.String(100), unique=True, nullable=False)
     status = db.Column(db.String(20), default='available')
     active_qr_token = db.Column(db.String(100), unique=True, nullable=True)
-    qr_token_expiry = db.Column(db.DateTime, nullable=True)
+    # タイムゾーン情報を正しく扱うために `timezone=True` を追加
+    qr_token_expiry = db.Column(db.DateTime(timezone=True), nullable=True)
     orders = db.relationship('Order', backref='table', lazy='dynamic', cascade="all, delete-orphan")
 
 class Order(db.Model):
@@ -64,7 +65,7 @@ class Order(db.Model):
     item_name = db.Column(db.String(100), nullable=False)
     item_price = db.Column(db.Integer, nullable=False)
     status = db.Column(db.String(20), default='pending')
-    timestamp = db.Column(db.DateTime, default=lambda: datetime.datetime.now(JST))
+    timestamp = db.Column(db.DateTime(timezone=True), default=lambda: datetime.datetime.now(JST))
     table_id = db.Column(db.Integer, db.ForeignKey('table.id'), nullable=False)
     session_id = db.Column(db.String(100))
 
@@ -80,6 +81,7 @@ def index():
 @app.route('/qr/<token>')
 def qr_auth(token):
     table = Table.query.filter_by(active_qr_token=token).first()
+    # タイムゾーン対応の現在時刻で比較
     if not table or (table.qr_token_expiry and table.qr_token_expiry < datetime.datetime.now(JST)):
         flash('QRコードが無効か期限切れです。', 'danger')
         return redirect(url_for('index'))
