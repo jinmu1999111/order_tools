@@ -106,13 +106,16 @@
         document.addEventListener('DOMContentLoaded', function() {
             const animationElement = document.getElementById('cooking-animation');
             if (!animationElement) return;
+
+            // ★★★ 修正点: 画像のパスを2つにする ★★★
             const imageSources = [
                 "{{ url_for('static', filename='images/cooking_1.png') }}",
-                "{{ url_for('static', filename='images/cooking_2.png') }}",
-                "{{ url_for('static', filename='images/cooking_3.png') }}"
+                "{{ url_for('static', filename='images/cooking_2.png') }}"
             ];
+
             let currentFrame = 0;
             let animationInterval;
+
             function startAnimation() {
                 if (animationInterval) return;
                 animationInterval = setInterval(() => {
@@ -120,14 +123,16 @@
                     animationElement.src = imageSources[currentFrame];
                 }, 500);
             }
+
             function stopAnimation() {
                 clearInterval(animationInterval);
                 animationInterval = null;
             }
+
             async function checkKitchenStatus() {
                 try {
                     const response = await fetch('/api/kitchen/status');
-                    if (response.status === 401) { // セッション切れを検知
+                    if (response.status === 401) {
                         stopAnimation();
                         animationElement.style.display = 'none';
                         return;
@@ -145,6 +150,7 @@
                     console.error('Failed to check kitchen status:', error);
                 }
             }
+            
             checkKitchenStatus();
             setInterval(checkKitchenStatus, 15000);
         });
