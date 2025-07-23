@@ -12,9 +12,12 @@
     .stat-item { text-align: center; }
     .stat-number { font-size: 2rem; font-weight: 500; color: var(--color-primary); }
     .order-card {
-        border-left: 5px solid var(--color-primary);
+        border-left: 5px solid;
         transition: all 0.3s ease;
     }
+    .order-card.status-pending { border-left-color: #FFB74D; }
+    .order-card.status-preparing { border-left-color: #64B5F6; }
+    .order-card.status-ready { border-left-color: #81C784; }
 </style>
 {% endblock %}
 
@@ -27,25 +30,26 @@
 
     <div class="row kitchen-header mb-4">
         <div class="col-6 col-md-3 stat-item">
-            <div class="stat-number" id="pending-count">0</div>
+            <div class="stat-number" id="pending-count">{{ stats.pending_orders or 0 }}</div>
             <div>調理待ち</div>
         </div>
         <div class="col-6 col-md-3 stat-item">
-            <div class="stat-number" id="preparing-count">0</div>
+            <div class="stat-number" id="preparing-count">{{ stats.preparing_orders or 0 }}</div>
             <div>調理中</div>
         </div>
         <div class="col-6 col-md-3 stat-item">
-            <div class="stat-number" id="ready-count">0</div>
+            <div class="stat-number" id="ready-count">{{ stats.ready_orders or 0 }}</div>
             <div>提供準備OK</div>
         </div>
         <div class="col-6 col-md-3 stat-item">
-            <div class="stat-number" id="total-count">0</div>
+            <div class="stat-number" id="total-count">{{ stats.total_orders or 0 }}</div>
             <div>本日の注文件数</div>
         </div>
     </div>
 
     <div class="orders-grid row" id="orders-grid">
-        </div>
+        <!-- 注文カードがここに動的に生成される -->
+    </div>
     <div class="text-center p-5" id="empty-state" style="display: none;">
         <h3>現在の注文はありません</h3>
     </div>
@@ -57,17 +61,21 @@
     const audioContext = new AudioContext();
 
     let soundEnabled = true;
-    let knownOrderIds = new Set();
 
     async function fetchOrders() {
         try {
             const response = await fetch('/api/kitchen/orders');
             if (!response.ok) {
+<<<<<<< HEAD
                 console.error("Network error");
+=======
+                showNotification('ネットワークエラーが発生しました', 'error');
+>>>>>>> parent of 8190738 (a)
                 return;
             }
             const data = await response.json();
             if (data.success) {
+<<<<<<< HEAD
                 // 注文数を更新
                 const pendingOrders = data.orders || [];
                 document.getElementById('pending-count').textContent = pendingOrders.length;
@@ -81,10 +89,21 @@
 
                 knownOrderIds = new Set(pendingOrders.map(o => o.session_id));
                 renderOrders(pendingOrders);
+=======
+                updateStats(data.stats);
+                renderOrders(data.orders);
+>>>>>>> parent of 8190738 (a)
             }
         } catch (error) {
             console.error("Fetch error:", error);
         }
+    }
+
+    function updateStats(stats) {
+        document.getElementById('pending-count').textContent = stats.pending_orders || 0;
+        document.getElementById('preparing-count').textContent = stats.preparing_orders || 0;
+        document.getElementById('ready-count').textContent = stats.ready_orders || 0;
+        document.getElementById('total-count').textContent = stats.total_orders || 0;
     }
 
     function renderOrders(orders) {
@@ -109,17 +128,24 @@
                 </li>`;
             });
 
+            let actionButton = '';
+            if (order.status === 'pending') {
+                actionButton = `<button class="btn btn-primary w-100" onclick="updateStatus('${order.id}', 'preparing')">調理開始</button>`;
+            } else if (order.status === 'preparing') {
+                actionButton = `<button class="btn btn-success w-100" onclick="updateStatus('${order.id}', 'ready')">提供OK</button>`;
+            } else if (order.status === 'ready') {
+                actionButton = `<p class="text-success text-center mb-0">配膳待ち</p>`;
+            }
+
             card.innerHTML = `
-                <div class="card h-100 order-card">
+                <div class="card h-100 order-card status-${order.status}">
                     <div class="card-body d-flex flex-column">
                         <div class="d-flex justify-content-between">
-                            <h5 class="card-title">${order.table_name}</h5>
-                            <small class="text-muted">${new Date(order.timestamp).toLocaleTimeString('ja-JP')}</small>
+                            <h5 class="card-title">${order.table_number}</h5>
+                            <small class="text-muted">${new Date(order.created_at).toLocaleTimeString('ja-JP')}</small>
                         </div>
                         <ul class="list-group list-group-flush my-3 flex-grow-1">${itemsHtml}</ul>
-                        <div>
-                            <button class="btn btn-success w-100" onclick="completeOrder('${order.session_id}')">調理完了</button>
-                        </div>
+                        <div>${actionButton}</div>
                     </div>
                 </div>
             `;
@@ -127,8 +153,13 @@
         });
     }
 
-    async function completeOrder(sessionId) {
-        await fetch(`/api/order/complete/${sessionId}`, { method: 'POST' });
+    async function updateStatus(sessionId, newStatus) {
+        await fetch(`/api/kitchen/orders/${sessionId}/status`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: newStatus })
+        });
+        if(soundEnabled) playSound();
         fetchOrders();
     }
     
@@ -147,6 +178,7 @@
             gainNode.connect(audioContext.destination);
             
             oscillator.type = 'sine';
+<<<<<<< HEAD
             oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4
             gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
 
@@ -154,6 +186,12 @@
             oscillator.start(audioContext.currentTime);
             oscillator.stop(audioContext.currentTime + 0.5);
 
+=======
+            oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
+            oscillator.connect(audioContext.destination);
+            oscillator.start();
+            oscillator.stop(audioContext.currentTime + 0.2);
+>>>>>>> parent of 8190738 (a)
         } catch (e) {
             console.error("Sound play failed", e);
         }
@@ -174,6 +212,10 @@
     });
 
     document.addEventListener('DOMContentLoaded', fetchOrders);
+<<<<<<< HEAD
     setInterval(fetchOrders, 10000); // 10秒に短縮してテストしやすく
+=======
+    setInterval(fetchOrders, 15000); // 15秒ごとに更新
+>>>>>>> parent of 8190738 (a)
 </script>
 {% endblock %}

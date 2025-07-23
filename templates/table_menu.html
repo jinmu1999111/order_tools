@@ -3,6 +3,7 @@
 
 {% block extra_css %}
 <style>
+<<<<<<< HEAD
     .menu-header { text-align: center; padding: 2.5rem 1rem; margin-bottom: 1rem; }
     .menu-header h1 { font-size: 3.5rem; }
     .menu-header p { font-size: 1.2rem; color: var(--color-secondary); }
@@ -12,6 +13,59 @@
         background: var(--color-text); color: white; width: 65px; height: 65px;
         border-radius: 50%; font-size: 1.8rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
         border: 3px solid white; display: flex; align-items: center; justify-content: center;
+=======
+    .menu-header {
+        text-align: center;
+        padding: 2.5rem 1rem;
+        margin-bottom: 2rem;
+    }
+    .menu-header h1 {
+        font-size: 3.5rem;
+    }
+    .menu-header p {
+        font-size: 1.2rem;
+        color: var(--color-secondary);
+    }
+    .section-title {
+        font-size: 2.5rem;
+        text-align: center;
+        margin: 4rem 0 2rem 0;
+        color: var(--color-secondary);
+    }
+    .menu-item {
+        border-radius: 8px;
+        text-align: center;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .item-name {
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+    }
+    .item-price {
+        font-size: 1.3rem;
+        font-weight: 500;
+        color: var(--color-primary);
+        margin-bottom: 1rem;
+    }
+    .qty-btn {
+        background: #fff;
+        border: 1px solid #EAE0D5;
+    }
+    .add-to-cart-btn {
+        background: var(--color-primary);
+    }
+    .floating-cart-btn {
+        background: var(--color-text);
+        color: white;
+        width: 65px;
+        height: 65px;
+        border-radius: 50%;
+        font-size: 1.8rem;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        z-index: 999;
+        border: 3px solid white;
+>>>>>>> parent of 8190738 (a)
     }
 </style>
 {% endblock %}
@@ -33,6 +87,7 @@
     {% include '_menu_category.html' %}
 </div>
 
+<<<<<<< HEAD
 <div class="floating-buttons">
     <button class="floating-btn btn" data-bs-toggle="modal" data-bs-target="#historyModal" onclick="fetchOrderHistory()">
         <i class="bi bi-receipt"></i>
@@ -43,6 +98,26 @@
     </button>
 </div>
 
+=======
+<button class="floating-cart-btn btn" data-bs-toggle="offcanvas" data-bs-target="#cart-sidebar" aria-controls="cart-sidebar">
+    <i class="bi bi-basket3-fill"></i>
+    <span class="badge bg-danger rounded-pill position-absolute top-0 start-100 translate-middle" id="cart-count" style="display: none;"></span>
+</button>
+
+<div class="offcanvas offcanvas-end" tabindex="-1" id="cart-sidebar" aria-labelledby="cart-sidebar-label">
+    <div class="offcanvas-header border-bottom">
+        <h5 class="offcanvas-title" id="cart-sidebar-label">ご注文内容</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body" id="cart-items">
+        <p class="text-center text-muted p-4">カートは空です。</p>
+    </div>
+    <div class="p-3 border-top bg-light">
+        <h4>合計: <span id="total">¥0</span></h4>
+        <button class="btn btn-success btn-lg w-100" onclick="submitOrder()" id="submit-order-btn" disabled>注文を確定する</button>
+    </div>
+</div>
+>>>>>>> parent of 8190738 (a)
 {% endblock %}
 
 {% block scripts %}
@@ -109,8 +184,68 @@
         qtyEl.textContent = 0;
         updateCartDisplay();
     }
+<<<<<<< HEAD
     
     // (updateCartDisplay, submitOrder, fetchOrderHistoryは変更なし)
     // ...
+=======
+
+    function updateCartDisplay() {
+        const cartItemsEl = document.getElementById('cart-items');
+        const cartCountEl = document.getElementById('cart-count');
+        let totalItems = 0, totalPrice = 0, html = '';
+        
+        for (const [itemId, item] of Object.entries(cart)) {
+            totalItems += item.quantity;
+            totalPrice += item.price * item.quantity;
+            html += `<div class="p-2 border-bottom d-flex justify-content-between">
+                        <span>${item.name} x ${item.quantity}</span>
+                        <span>¥${(item.price * item.quantity).toLocaleString()}</span>
+                     </div>`;
+        }
+
+        cartItemsEl.innerHTML = html || '<p class="text-center text-muted p-4">カートは空です。</p>';
+        document.getElementById('total').textContent = `¥${totalPrice.toLocaleString()}`;
+        cartCountEl.textContent = totalItems;
+        cartCountEl.style.display = totalItems > 0 ? 'inline-block' : 'none';
+        document.getElementById('submit-order-btn').disabled = totalItems === 0;
+    }
+
+    async function submitOrder() {
+        const btn = document.getElementById('submit-order-btn');
+        btn.disabled = true;
+        btn.innerHTML = '送信中...';
+        
+        try {
+            const response = await fetch('/api/order/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ table_id: tableId, items: cart })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success) {
+                    alert('ご注文ありがとうございます！お料理が出来上がるまで少々お待ちください。');
+                    cart = {};
+                    updateCartDisplay();
+                    const cartOffcanvas = bootstrap.Offcanvas.getInstance(document.getElementById('cart-sidebar'));
+                    if (cartOffcanvas) {
+                        cartOffcanvas.hide();
+                    }
+                } else {
+                    throw new Error(data.message || '注文の送信に失敗しました。');
+                }
+            } else {
+                throw new Error('サーバーとの通信に失敗しました。');
+            }
+        } catch (error) {
+            alert(error.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '注文を確定する';
+        }
+    }
+>>>>>>> parent of 8190738 (a)
 </script>
 {% endblock %}

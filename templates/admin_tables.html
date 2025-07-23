@@ -29,7 +29,7 @@
                 <div class="card-footer bg-transparent">
                     <div class="btn-group w-100">
                         <button class="btn btn-sm btn-outline-secondary" onclick="refreshToken({{ table.id }})">更新</button>
-                        <button class="btn btn-sm btn-outline-secondary" onclick="enlargeQR('{{ table.name }}', '{{ table.active_qr_token }}')">拡大</button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="enlargeQR('{{ table.name }}', '{{ table.active_qr_token if table.active_qr_token else 'None' }}')">拡大</button>
                     </div>
                 </div>
             </div>
@@ -42,26 +42,78 @@
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
-    const handleApiError = (response) => {
+    const handleApiError = async (response) => {
         if (response.status === 401) {
             alert('セッションが切れました。再度ログインしてください。');
             window.location.href = '/login';
             return true;
         }
-        return false;
+        // ここでエラーメッセージをより詳細に取得・表示する
+        try {
+            const errorData = await response.json();
+            alert(`エラー: ${errorData.message || '不明なエラーが発生しました。'}`);
+        } catch (e) {
+            alert('エラーが発生しました。');
+        }
+        return true;
     };
+
     function generateQRCode(containerId, token, size = 150) {
         const qrContainer = document.getElementById(containerId);
         if (!qrContainer) return;
         qrContainer.innerHTML = '';
-        new QRCode(qrContainer, { text: `${window.location.origin}/qr/${token}`, width: size, height: size, correctLevel: QRCode.CorrectLevel.H });
+        if (token && token !== 'None') { // トークンが有効な場合にのみQRコードを生成
+            new QRCode(qrContainer, { text: `${window.location.origin}/qr/${token}`, width: size, height: size, correctLevel: QRCode.CorrectLevel.H });
+        } else {
+            // QRコードがない場合のプレースホルダーなど
+            qrContainer.innerHTML = '<div class="text-muted small">QR未生成</div>';
+        }
     }
+
+    // 新しいテーブルカードを生成して追加する関数
+    function addTableCard(table) {
+        const tablesGrid = document.getElementById('tables-grid');
+        const colDiv = document.createElement('div');
+        colDiv.className = 'col-md-6 col-lg-4 mb-4';
+        colDiv.id = `table-card-${table.id}`;
+
+        const expiryText = table.expiry ? `有効期限: ${new Date(table.expiry).toLocaleTimeString('ja-JP', {hour: '2-digit', minute:'2-digit'})}` : '';
+        const tokenForEnlarge = table.token ? `'${table.token}'` : `'None'`; // enlargeQRに渡すトークン
+
+        colDiv.innerHTML = `
+            <div class="card h-100">
+                <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">${table.name}</h5>
+                    <button type="button" class="btn-close" onclick="deleteTable(${table.id})"></button>
+                </div>
+                <div class="card-body text-center d-flex flex-column justify-content-center align-items-center">
+                    <div id="qrcode-${table.id}" class="mb-2" style="min-height: 160px;"></div>
+                    <small class="text-muted" id="expiry-${table.id}">
+                        ${expiryText}
+                    </small>
+                </div>
+                <div class="card-footer bg-transparent">
+                    <div class="btn-group w-100">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="refreshToken(${table.id})">更新</button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="enlargeQR('${table.name}', ${tokenForEnlarge})">拡大</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        tablesGrid.appendChild(colDiv);
+        generateQRCode(`qrcode-${table.id}`, table.token); // 新しく追加されたテーブルのQRコードを生成
+    }
+
+
     async function refreshToken(tableId) {
         try {
             const response = await fetch(`/api/qr/generate/${tableId}`, { method: 'POST' });
-            if (handleApiError(response)) return;
+            if (await handleApiError(response)) return; // awaitを追加
             const data = await response.json();
-            if (!response.ok || !data.success) throw new Error(data.message || 'QRコードの更新に失敗しました。');
+            if (!response.ok || !data.success) {
+                alert(data.message || 'QRコードの更新に失敗しました。');
+                return;
+            }
             generateQRCode(`qrcode-${tableId}`, data.token);
             document.getElementById(`expiry-${tableId}`).textContent = `有効期限: ${new Date(data.expiry).toLocaleTimeString('ja-JP', {hour: '2-digit', minute:'2-digit'})}`;
             const card = document.getElementById(`table-card-${tableId}`);
@@ -73,8 +125,11 @@
         if (!confirm('本当にこのテーブルを削除しますか？')) return;
         try {
             const response = await fetch(`/api/tables/${tableId}`, { method: 'DELETE' });
-            if (handleApiError(response)) return;
-            if (!response.ok) throw new Error('テーブルの削除に失敗しました。');
+            if (await handleApiError(response)) return; // awaitを追加
+            if (!response.ok) {
+                alert('テーブルの削除に失敗しました。');
+                return;
+            }
             document.getElementById(`table-card-${tableId}`).remove();
         } catch (error) { alert(error.message); }
     }
@@ -83,10 +138,14 @@
         const name = document.getElementById('new_table_name').value;
         try {
             const response = await fetch('/api/tables', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
-            if (handleApiError(response)) return;
+            if (await handleApiError(response)) return; // awaitを追加
             const data = await response.json();
-            if (!response.ok || !data.success) throw new Error(data.message || 'テーブルの追加に失敗しました。');
-            location.reload();
+            if (!response.ok || !data.success) {
+                alert(data.message || 'テーブルの追加に失敗しました。');
+                return;
+            }
+            addTableCard(data); // ページリロードなしでテーブルを追加
+            document.getElementById('new_table_name').value = ''; // フォームをクリア
         } catch (error) { alert(error.message); }
     });
     function enlargeQR(tableName, token) {
@@ -96,7 +155,10 @@
         new bootstrap.Modal(document.getElementById('qr-modal')).show();
     }
     document.addEventListener('DOMContentLoaded', () => {
-        {% for table in tables %}{% if table.active_qr_token %}generateQRCode('qrcode-{{ table.id }}', '{{ table.active_qr_token }}');{% endif %}{% endfor %}
+        {% for table in tables %}
+            // 初期表示時にactive_qr_tokenが存在すればQRコードを生成
+            generateQRCode('qrcode-{{ table.id }}', '{{ table.active_qr_token if table.active_qr_token else 'None' }}');
+        {% endfor %}
     });
 </script>
 {% endblock %}

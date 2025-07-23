@@ -10,7 +10,7 @@ from sqlalchemy import func, desc, and_
 import pytz
 from collections import defaultdict
 from math import ceil
-from flask_migrate import Migrate # この行を追加しました
+from flask_migrate import Migrate
 
 # --- アプリケーションとデータベースの初期設定 ---
 app = Flask(__name__)
@@ -24,7 +24,7 @@ app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(hours=8)
 instance_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance')
 os.makedirs(instance_path, exist_ok=True)
 db = SQLAlchemy(app)
-migrate = Migrate(app, db) # この行を追加しました
+migrate = Migrate(app, db)
 JST = pytz.timezone('Asia/Tokyo')
 
 # --- ログイン機能の設定 ---
@@ -114,7 +114,7 @@ def qr_auth(token):
     if table and (not table.qr_token_expiry or table.qr_token_expiry > datetime.datetime.now(JST)):
         session['session_id'] = secrets.token_hex(16)
         session['table_id'] = table.id
-        table.status = 'occupied'
+        table.status = 'occupied' # 追加: 固定QRからのアクセス時もstatusを更新
         db.session.commit()
         return redirect(url_for('table_menu', table_id=table.id))
     flash('QRコードが無効か期限切れです。', 'danger')
@@ -290,9 +290,14 @@ def api_add_table():
     if not name: return jsonify(success=False, message='Table name is required'), 400
     if Table.query.filter_by(name=name).first(): return jsonify(success=False, message='Table name already exists'), 400
     new_table = Table(name=name)
+    # 新規テーブル作成時にQRトークンも生成
+    new_table.active_qr_token = secrets.token_urlsafe(16)
+    new_table.qr_token_expiry = datetime.datetime.now(JST) + datetime.timedelta(hours=8)
     db.session.add(new_table)
     db.session.commit()
-    return jsonify(success=True, id=new_table.id, name=new_table.name)
+    return jsonify(success=True, id=new_table.id, name=new_table.name, 
+                   token=new_table.active_qr_token, 
+                   expiry=new_table.qr_token_expiry.isoformat()) # 新しいQR情報を返す
 
 @app.route('/api/tables/<int:table_id>', methods=['DELETE'])
 @login_required
@@ -308,10 +313,14 @@ def api_delete_table(table_id):
 def api_add_menu_item():
     data = request.json
     if not all(k in data for k in ['name', 'price', 'category']): return jsonify(success=False, message='Missing data'), 400
-    item = MenuItem(name=data['name'], price=int(data['price']), category=data['category'])
+    # 新しいメニューアイテムにデフォルトの並び順を設定
+    # 現在のカテゴリ内の最大並び順を取得し、それに1を加える（あるいは0から始める）
+    max_sort_order = db.session.query(func.max(MenuItem.sort_order)).filter_by(category=data['category']).scalar()
+    new_sort_order = (max_sort_order + 1) if max_sort_order is not None else 0
+    item = MenuItem(name=data['name'], price=int(data['price']), category=data['category'], sort_order=new_sort_order)
     db.session.add(item)
     db.session.commit()
-    return jsonify(success=True)
+    return jsonify(success=True, item_id=item.id, name=item.name, price=item.price, category=item.category, active=item.active)
 
 @app.route('/api/menu/<int:item_id>', methods=['DELETE'])
 @login_required
@@ -338,9 +347,14 @@ def update_menu_order():
     item_ids = data.get('item_ids')
     if not item_ids: return jsonify(success=False, message="No item IDs provided"), 400
     try:
-        for index, item_id in enumerate(item_ids):
-            item = db.session.get(MenuItem, int(item_id))
-            if item: item.sort_order = index
+        # まず全てのアイテムをIDで一度に取得する
+        items_map = {item.id: item for item in MenuItem.query.filter(MenuItem.id.in_(item_ids)).all()}
+        
+        for index, item_id_str in enumerate(item_ids):
+            item_id = int(item_id_str)
+            item = items_map.get(item_id)
+            if item: 
+                item.sort_order = index
         db.session.commit()
         return jsonify(success=True)
     except Exception as e:
@@ -436,7 +450,12 @@ def init_db_command():
             db.session.add(admin_user)
             print("管理者アカウントを作成しました: admin / password123")
         if Table.query.count() == 0:
-            db.session.add_all([Table(name=f'{i}番テーブル') for i in range(1, 6)])
+            for i in range(1, 6):
+                table = Table(name=f'{i}番テーブル')
+                # init-dbでもQRを生成する
+                table.active_qr_token = secrets.token_urlsafe(16)
+                table.qr_token_expiry = datetime.datetime.now(JST) + datetime.timedelta(hours=8)
+                db.session.add(table)
             print("サンプルテーブルを作成しました。")
         db.session.commit()
         print("データベースの初期化・更新が完了しました。")
