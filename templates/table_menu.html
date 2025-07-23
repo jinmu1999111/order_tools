@@ -3,17 +3,6 @@
 
 {% block extra_css %}
 <style>
-<<<<<<< HEAD
-    .menu-header { text-align: center; padding: 2.5rem 1rem; margin-bottom: 1rem; }
-    .menu-header h1 { font-size: 3.5rem; }
-    .menu-header p { font-size: 1.2rem; color: var(--color-secondary); }
-    .sort-options { text-align: center; margin-bottom: 2rem; }
-    .floating-buttons { position: fixed; bottom: 20px; right: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 10px; }
-    .floating-btn {
-        background: var(--color-text); color: white; width: 65px; height: 65px;
-        border-radius: 50%; font-size: 1.8rem; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-        border: 3px solid white; display: flex; align-items: center; justify-content: center;
-=======
     .menu-header {
         text-align: center;
         padding: 2.5rem 1rem;
@@ -25,6 +14,10 @@
     .menu-header p {
         font-size: 1.2rem;
         color: var(--color-secondary);
+    }
+    .sort-options {
+        text-align: center;
+        margin-bottom: 2rem;
     }
     .section-title {
         font-size: 2.5rem;
@@ -55,7 +48,16 @@
     .add-to-cart-btn {
         background: var(--color-primary);
     }
-    .floating-cart-btn {
+    .floating-buttons {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 1000;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    .floating-btn {
         background: var(--color-text);
         color: white;
         width: 65px;
@@ -63,9 +65,10 @@
         border-radius: 50%;
         font-size: 1.8rem;
         box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-        z-index: 999;
         border: 3px solid white;
->>>>>>> parent of 8190738 (a)
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
 </style>
 {% endblock %}
@@ -87,7 +90,7 @@
     {% include '_menu_category.html' %}
 </div>
 
-<<<<<<< HEAD
+<!-- フローティングボタン -->
 <div class="floating-buttons">
     <button class="floating-btn btn" data-bs-toggle="modal" data-bs-target="#historyModal" onclick="fetchOrderHistory()">
         <i class="bi bi-receipt"></i>
@@ -98,12 +101,7 @@
     </button>
 </div>
 
-=======
-<button class="floating-cart-btn btn" data-bs-toggle="offcanvas" data-bs-target="#cart-sidebar" aria-controls="cart-sidebar">
-    <i class="bi bi-basket3-fill"></i>
-    <span class="badge bg-danger rounded-pill position-absolute top-0 start-100 translate-middle" id="cart-count" style="display: none;"></span>
-</button>
-
+<!-- カートサイドバー -->
 <div class="offcanvas offcanvas-end" tabindex="-1" id="cart-sidebar" aria-labelledby="cart-sidebar-label">
     <div class="offcanvas-header border-bottom">
         <h5 class="offcanvas-title" id="cart-sidebar-label">ご注文内容</h5>
@@ -117,7 +115,30 @@
         <button class="btn btn-success btn-lg w-100" onclick="submitOrder()" id="submit-order-btn" disabled>注文を確定する</button>
     </div>
 </div>
->>>>>>> parent of 8190738 (a)
+
+<!-- 注文履歴モーダル -->
+<div class="modal fade" id="historyModal" tabindex="-1" aria-labelledby="historyModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="historyModalLabel">ご注文履歴</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="history-content">
+                <div class="text-center p-3">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <div class="w-100">
+                    <h5>合計金額: <span id="history-total">¥0</span></h5>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -125,7 +146,7 @@
     let cart = {};
     const tableId = {{ table.id }};
 
-    // ★★★ 修正点: メニューを動的に読み込む関数 ★★★
+    // メニューを動的に読み込む関数
     async function loadMenu(sortBy) {
         const menuContainer = document.getElementById('menu-container');
         menuContainer.innerHTML = '<div class="text-center p-5"><div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div></div>';
@@ -152,10 +173,8 @@
         }
     }
 
-
-    // 既存のJavaScript関数 (changeQuantity, addToCartなど)
+    // 数量を変更
     function changeQuantity(itemId, change) {
-        // この関数はDOMに依存するため、イベント委譲を使うように変更
         const qtyEl = document.getElementById(`qty-${itemId}`);
         if (!qtyEl) return;
         let qty = parseInt(qtyEl.textContent) + change;
@@ -163,6 +182,7 @@
         qtyEl.textContent = qty;
     }
 
+    // カートに追加
     function addToCart(itemId) {
         const qtyEl = document.getElementById(`qty-${itemId}`);
         if (!qtyEl) return;
@@ -183,13 +203,12 @@
 
         qtyEl.textContent = 0;
         updateCartDisplay();
+        
+        // カートに追加した通知
+        showNotification(`${name} x${qty} をカートに追加しました`);
     }
-<<<<<<< HEAD
-    
-    // (updateCartDisplay, submitOrder, fetchOrderHistoryは変更なし)
-    // ...
-=======
 
+    // カート表示を更新
     function updateCartDisplay() {
         const cartItemsEl = document.getElementById('cart-items');
         const cartCountEl = document.getElementById('cart-count');
@@ -199,7 +218,10 @@
             totalItems += item.quantity;
             totalPrice += item.price * item.quantity;
             html += `<div class="p-2 border-bottom d-flex justify-content-between">
-                        <span>${item.name} x ${item.quantity}</span>
+                        <div>
+                            <span>${item.name} x ${item.quantity}</span>
+                            <button class="btn btn-sm btn-link text-danger" onclick="removeFromCart('${itemId}')">削除</button>
+                        </div>
                         <span>¥${(item.price * item.quantity).toLocaleString()}</span>
                      </div>`;
         }
@@ -211,10 +233,17 @@
         document.getElementById('submit-order-btn').disabled = totalItems === 0;
     }
 
+    // カートから削除
+    function removeFromCart(itemId) {
+        delete cart[itemId];
+        updateCartDisplay();
+    }
+
+    // 注文を送信
     async function submitOrder() {
         const btn = document.getElementById('submit-order-btn');
         btn.disabled = true;
-        btn.innerHTML = '送信中...';
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> 送信中...';
         
         try {
             const response = await fetch('/api/order/submit', {
@@ -239,9 +268,80 @@
             alert(error.message);
         } finally {
             btn.disabled = false;
-            btn.textContent = '注文を確定する';
+            btn.innerHTML = '注文を確定する';
         }
     }
->>>>>>> parent of 8190738 (a)
+
+    // 注文履歴を取得
+    async function fetchOrderHistory() {
+        const historyContent = document.getElementById('history-content');
+        const historyTotal = document.getElementById('history-total');
+        
+        try {
+            const response = await fetch('/api/customer/orders');
+            const data = await response.json();
+            
+            if (data.success && data.orders && data.orders.length > 0) {
+                let html = '<div class="list-group">';
+                data.orders.forEach(order => {
+                    let statusBadge = '';
+                    switch(order.status) {
+                        case 'pending':
+                            statusBadge = '<span class="badge bg-warning">調理待ち</span>';
+                            break;
+                        case 'preparing':
+                            statusBadge = '<span class="badge bg-info">調理中</span>';
+                            break;
+                        case 'ready':
+                            statusBadge = '<span class="badge bg-success">準備完了</span>';
+                            break;
+                        case 'served':
+                            statusBadge = '<span class="badge bg-secondary">提供済み</span>';
+                            break;
+                        case 'cancelled':
+                            statusBadge = '<span class="badge bg-danger">キャンセル</span>';
+                            break;
+                        default:
+                            statusBadge = `<span class="badge bg-secondary">${order.status}</span>`;
+                    }
+                    
+                    html += `
+                        <div class="list-group-item">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">${order.name}</h6>
+                                <small>¥${order.price.toLocaleString()}</small>
+                            </div>
+                            <small>${statusBadge}</small>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                historyContent.innerHTML = html;
+                historyTotal.textContent = `¥${data.total.toLocaleString()}`;
+            } else {
+                historyContent.innerHTML = '<p class="text-center text-muted p-4">まだ注文履歴がありません。</p>';
+                historyTotal.textContent = '¥0';
+            }
+        } catch (error) {
+            console.error('Failed to fetch order history:', error);
+            historyContent.innerHTML = '<p class="text-center text-danger p-4">履歴の取得に失敗しました。</p>';
+        }
+    }
+
+    // 通知表示
+    function showNotification(message) {
+        const toast = document.createElement('div');
+        toast.className = 'toast position-fixed bottom-0 end-0 m-3';
+        toast.style.zIndex = 9999;
+        toast.innerHTML = `
+            <div class="toast-body">
+                ${message}
+            </div>
+        `;
+        document.body.appendChild(toast);
+        const bsToast = new bootstrap.Toast(toast);
+        bsToast.show();
+        toast.addEventListener('hidden.bs.toast', () => toast.remove());
+    }
 </script>
 {% endblock %}

@@ -1,6 +1,13 @@
 import os
 import datetime
 import secrets
+
+# app.pyの最初の方に追加
+from dotenv import load_dotenv
+
+# .envファイルを読み込む
+load_dotenv()
+
 from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, session, abort
 from flask_sqlalchemy import SQLAlchemy
@@ -14,7 +21,7 @@ from flask_migrate import Migrate
 
 # --- アプリケーションとデータベースの初期設定 ---
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
+app.secret_key = os.environ.get('SECRET_KEY', 'your-fixed-secret-key-here-change-this-in-production')
 db_url = os.environ.get('DATABASE_URL', 'sqlite:///instance/test.db')
 if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
@@ -538,3 +545,31 @@ def init_db_command():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)
+@app.route('/admin/analytics')
+@login_required
+def admin_analytics():
+    today_start = datetime.datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_orders = Order.query.filter(Order.timestamp >= today_start).count()
+    today_revenue = db.session.query(func.sum(Order.item_price)).filter(
+        Order.timestamp >= today_start,
+        Order.status != 'cancelled'
+    ).scalar() or 0
+    
+    popular_items = db.session.query(
+        Order.item_name, 
+        func.count(Order.id).label('total_quantity')
+    ).filter(
+        Order.timestamp >= today_start,
+        Order.status != 'cancelled'
+    ).group_by(Order.item_name).order_by(desc('total_quantity')).limit(5).all()
+    
+    return render_template('admin_analytics.html', 
+                         today_orders=today_orders,
+                         today_revenue=today_revenue,
+                         popular_items=popular_items)
+
+@app.route('/admin/security')
+@login_required
+def admin_security():
+    recent_logs = []
+    return render_template('admin_security.html', recent_logs=recent_logs)

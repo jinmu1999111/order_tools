@@ -30,19 +30,19 @@
 
     <div class="row kitchen-header mb-4">
         <div class="col-6 col-md-3 stat-item">
-            <div class="stat-number" id="pending-count">{{ stats.pending_orders or 0 }}</div>
+            <div class="stat-number" id="pending-count">0</div>
             <div>調理待ち</div>
         </div>
         <div class="col-6 col-md-3 stat-item">
-            <div class="stat-number" id="preparing-count">{{ stats.preparing_orders or 0 }}</div>
+            <div class="stat-number" id="preparing-count">0</div>
             <div>調理中</div>
         </div>
         <div class="col-6 col-md-3 stat-item">
-            <div class="stat-number" id="ready-count">{{ stats.ready_orders or 0 }}</div>
+            <div class="stat-number" id="ready-count">0</div>
             <div>提供準備OK</div>
         </div>
         <div class="col-6 col-md-3 stat-item">
-            <div class="stat-number" id="total-count">{{ stats.total_orders or 0 }}</div>
+            <div class="stat-number" id="total-count">0</div>
             <div>本日の注文件数</div>
         </div>
     </div>
@@ -56,49 +56,59 @@
 </div>
 
 <script>
-    // ★★★ 修正点 1: AudioContextを最初に一度だけ作成 ★★★
+    // AudioContextの初期化
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     const audioContext = new AudioContext();
 
     let soundEnabled = true;
+    let knownOrderIds = new Set(); // 新規注文検知用
 
+    // 通知表示関数
+    function showNotification(message, type = 'info') {
+        console.log(`${type}: ${message}`);
+        // Bootstrap alertを使った通知
+        const alertDiv = document.createElement('div');
+        alertDiv.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3`;
+        alertDiv.style.zIndex = 9999;
+        alertDiv.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        document.body.appendChild(alertDiv);
+        setTimeout(() => alertDiv.remove(), 5000);
+    }
+
+    // 注文データを取得
     async function fetchOrders() {
         try {
             const response = await fetch('/api/kitchen/orders');
             if (!response.ok) {
-<<<<<<< HEAD
                 console.error("Network error");
-=======
                 showNotification('ネットワークエラーが発生しました', 'error');
->>>>>>> parent of 8190738 (a)
                 return;
             }
             const data = await response.json();
             if (data.success) {
-<<<<<<< HEAD
-                // 注文数を更新
-                const pendingOrders = data.orders || [];
-                document.getElementById('pending-count').textContent = pendingOrders.length;
-
-                const newOrderIds = new Set(pendingOrders.map(o => o.session_id));
-                const isNewOrder = [...newOrderIds].some(id => !knownOrderIds.has(id));
-                
-                if (isNewOrder && knownOrderIds.size > 0) { // 最初の読み込みでは鳴らさない
-                    if(soundEnabled) playSound();
-                }
-
-                knownOrderIds = new Set(pendingOrders.map(o => o.session_id));
-                renderOrders(pendingOrders);
-=======
                 updateStats(data.stats);
+                
+                // 新規注文の検知とサウンド再生
+                const currentOrderIds = new Set(data.orders.map(o => o.session_id));
+                const isNewOrder = [...currentOrderIds].some(id => !knownOrderIds.has(id));
+                
+                if (isNewOrder && knownOrderIds.size > 0 && soundEnabled) {
+                    playSound();
+                }
+                
+                knownOrderIds = currentOrderIds;
                 renderOrders(data.orders);
->>>>>>> parent of 8190738 (a)
             }
         } catch (error) {
             console.error("Fetch error:", error);
+            showNotification('データの取得に失敗しました', 'error');
         }
     }
 
+    // 統計情報を更新
     function updateStats(stats) {
         document.getElementById('pending-count').textContent = stats.pending_orders || 0;
         document.getElementById('preparing-count').textContent = stats.preparing_orders || 0;
@@ -106,6 +116,7 @@
         document.getElementById('total-count').textContent = stats.total_orders || 0;
     }
 
+    // 注文カードを描画
     function renderOrders(orders) {
         const grid = document.getElementById('orders-grid');
         const emptyState = document.getElementById('empty-state');
@@ -153,20 +164,31 @@
         });
     }
 
-    async function updateStatus(sessionId, newStatus) {
-        await fetch(`/api/kitchen/orders/${sessionId}/status`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: newStatus })
-        });
-        if(soundEnabled) playSound();
-        fetchOrders();
+    // 注文ステータスを更新
+    async function updateStatus(orderId, newStatus) {
+        try {
+            const response = await fetch(`/api/kitchen/orders/${orderId}/status`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus })
+            });
+            
+            if (response.ok) {
+                if (soundEnabled) playSound();
+                showNotification('ステータスを更新しました', 'success');
+                fetchOrders();
+            } else {
+                const data = await response.json();
+                showNotification(data.message || 'ステータスの更新に失敗しました', 'error');
+            }
+        } catch (error) {
+            console.error('Update status error:', error);
+            showNotification('ステータスの更新に失敗しました', 'error');
+        }
     }
     
-    // ★★★ 修正点 2: playSound関数を修正 ★★★
+    // サウンドを再生
     function playSound() {
-        // AudioContextがユーザー操作なしに開始できない場合（suspended状態）は何もしない。
-        // この状態はボタンクリックで解除される。
         if (audioContext.state === 'suspended') {
             return;
         }
@@ -178,32 +200,24 @@
             gainNode.connect(audioContext.destination);
             
             oscillator.type = 'sine';
-<<<<<<< HEAD
-            oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4
+            oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
             gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
-
             gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.5);
+            
             oscillator.start(audioContext.currentTime);
             oscillator.stop(audioContext.currentTime + 0.5);
-
-=======
-            oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
-            oscillator.connect(audioContext.destination);
-            oscillator.start();
-            oscillator.stop(audioContext.currentTime + 0.2);
->>>>>>> parent of 8190738 (a)
         } catch (e) {
             console.error("Sound play failed", e);
         }
     }
 
-    // ★★★ 修正点 3: ボタンクリックでAudioContextを有効化 ★★★
+    // サウンドトグルボタンの処理
     document.getElementById('sound-toggle').addEventListener('click', () => {
         soundEnabled = !soundEnabled;
         const icon = document.querySelector('#sound-toggle i');
         icon.className = soundEnabled ? 'bi bi-volume-up-fill' : 'bi bi-volume-mute-fill';
 
-        // ユーザーの操作をきっかけにAudioContextを有効化（これが重要）
+        // ユーザー操作によりAudioContextを有効化
         if (audioContext.state === 'suspended') {
             audioContext.resume().then(() => {
                 console.log('AudioContext resumed!');
@@ -211,11 +225,8 @@
         }
     });
 
+    // ページ読み込み時の処理
     document.addEventListener('DOMContentLoaded', fetchOrders);
-<<<<<<< HEAD
-    setInterval(fetchOrders, 10000); // 10秒に短縮してテストしやすく
-=======
     setInterval(fetchOrders, 15000); // 15秒ごとに更新
->>>>>>> parent of 8190738 (a)
 </script>
 {% endblock %}
