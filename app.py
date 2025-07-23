@@ -163,107 +163,28 @@ def admin_guidance():
     return render_template('admin_guidance.html')
 
 # --- APIエンドポイント ---
-@app.route('/api/order/submit', methods=['POST'])
-def submit_order():
-    data = request.get_json()
-    table_id = data.get('table_id')
-    items = data.get('items')
-
-    if not table_id or not items:
-        return jsonify(success=False, message="無効な注文データです。"), 400
-
-    table = db.session.get(Table, table_id)
-    if not table:
-        return jsonify(success=False, message="テーブル情報が見つかりません。"), 404
-
-    session_id = secrets.token_hex(16)
-    for item_id, item_data in items.items():
-        menu_item = db.session.get(MenuItem, int(item_id))
-        if menu_item and item_data.get('quantity', 0) > 0:
-            menu_item.popularity_count += item_data['quantity']
-            for _ in range(item_data['quantity']):
-                order = Order(
-                    item_name=menu_item.name,
-                    item_price=menu_item.price,
-                    table_id=table.id,
-                    session_id=session_id
-                )
-                db.session.add(order)
-    
-    db.session.commit()
-    return jsonify(success=True)
-
-@app.route('/api/menu/add', methods=['POST'])
+@app.route('/api/guidance/generate', methods=['POST'])
 @login_required
-def api_add_menu_item():
+def api_seat_customer():
     data = request.json
-    name = data.get('name')
-    price = data.get('price')
-    category = data.get('category')
-    if name and price and category:
-        new_item = MenuItem(name=name, price=int(price), category=category)
-        db.session.add(new_item)
-        db.session.commit()
-        return jsonify(success=True, item={'id': new_item.id, 'name': new_item.name, 'price': new_item.price, 'category': new_item.category, 'active': new_item.active})
-    return jsonify(success=False, message='すべてのフィールドを入力してください。'), 400
-
-@app.route('/api/menu/<int:item_id>', methods=['DELETE'])
-@login_required
-def api_delete_menu_item(item_id):
-    item = db.session.get(MenuItem, item_id)
-    if item:
-        db.session.delete(item)
-        db.session.commit()
-        return jsonify(success=True)
-    return jsonify(success=False, message='Item not found'), 404
-
-@app.route('/api/menu/toggle/<int:item_id>', methods=['POST'])
-@login_required
-def api_toggle_menu_item(item_id):
-    item = db.session.get(MenuItem, item_id)
-    if item:
-        item.active = not item.active
-        db.session.commit()
-        return jsonify(success=True, active=item.active)
-    return jsonify(success=False, message='Item not found'), 404
-
-@app.route('/api/tables', methods=['POST'])
-@login_required
-def api_add_table():
-    name = request.json.get('name')
-    if name and not Table.query.filter_by(name=name).first():
-        new_table = Table(name=name)
-        db.session.add(new_table)
-        db.session.commit()
-        return jsonify(success=True, table={'id': new_table.id, 'name': new_table.name, 'status': new_table.status, 'active_qr_token': None, 'qr_token_expiry': None})
-    return jsonify(success=False, message='テーブル名が無効か、既に存在します。'), 400
-
-@app.route('/api/tables/<int:table_id>', methods=['DELETE'])
-@login_required
-def api_delete_table(table_id):
-    table = db.session.get(Table, table_id)
-    if table:
-        Order.query.filter_by(table_id=table.id).delete()
-        db.session.delete(table)
-        db.session.commit()
-        return jsonify(success=True)
-    return jsonify(success=False, message='テーブルが見つかりません。'), 404
-
-@app.route('/api/qr/generate/<int:table_id>', methods=['POST'])
-@login_required
-def api_generate_qr(table_id):
-    table = db.session.get(Table, table_id)
+    table_name = data.get('table_name')
+    if not table_name:
+        return jsonify(success=False, message="テーブル名を入力してください。"), 400
+    
+    table = Table.query.filter_by(name=table_name).first()
     if not table:
-        return jsonify(success=False, message='テーブルが見つかりません。'), 404
+        table = Table(name=table_name)
+        db.session.add(table)
     
     table.active_qr_token = secrets.token_urlsafe(16)
     table.qr_token_expiry = datetime.datetime.now(JST) + datetime.timedelta(hours=3)
+    table.status = 'occupied'
     db.session.commit()
     
     return jsonify(
         success=True,
         token=table.active_qr_token,
-        expiry=table.qr_token_expiry.strftime('%Y-%m-%d %H:%M:%S')
+        table_name=table.name
     )
 
 # --- データベース初期化コマンド ---

@@ -1,5 +1,5 @@
 {% extends 'layout.html' %}
-{% block title %}案内管理{% endblock %}
+{% block title %}お客様のご案内{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -11,23 +11,36 @@
         font-size: 1.8rem;
         margin-bottom: 0;
     }
+    #qr-result-card {
+        display: none; /* 初期状態では非表示 */
+    }
+    #generated-qr-code {
+        width: 100%;
+        max-width: 250px;
+        height: auto;
+        aspect-ratio: 1 / 1;
+        margin: 1rem auto;
+        padding: 1rem;
+        background-color: white;
+        border-radius: 8px;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="page-container">
-    <h1 class="mb-4" style="font-size: 2.5rem;">💁‍♀️ 案内管理</h1>
+    <h1 class="mb-4" style="font-size: 2.5rem;">💁‍♀️ お客様のご案内</h1>
 
-    <div class="card">
+    <div class="card mb-4">
         <div class="card-header bg-transparent border-0 pt-3">
             <h2>QRコード発行</h2>
         </div>
         <div class="card-body">
-            <p class="card-text text-muted">お客様をご案内するテーブル名と人数を入力して、QRコードを発行してください。</p>
+            <p class="card-text text-muted">お客様をご案内するテーブル名と人数を入力してQRコードを発行します。未登録のテーブル名も使用できます。</p>
             <form id="guidance-form" class="row g-3 align-items-end">
                 <div class="col-12 col-md">
                     <label for="table_name" class="form-label">テーブル名</label>
-                    <input type="text" id="table_name" name="table_name" class="form-control" placeholder="例: 5番テーブル" required>
+                    <input type="text" id="table_name" name="table_name" class="form-control" placeholder="例: 窓際2番席" required>
                 </div>
                 <div class="col-12 col-md-4">
                     <label for="guest_count" class="form-label">人数</label>
@@ -39,5 +52,57 @@
             </form>
         </div>
     </div>
+
+    <div class="card" id="qr-result-card">
+        <div class="card-body text-center">
+            <h3 id="qr-result-title"></h3>
+            <div id="generated-qr-code"></div>
+            <p class="text-muted">このQRコードをお客様に提示してください。</p>
+        </div>
+    </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script>
+    document.getElementById('guidance-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const tableName = document.getElementById('table_name').value;
+        const guestCount = document.getElementById('guest_count').value;
+
+        try {
+            const response = await fetch('/api/guidance/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ table_name: tableName, guest_count: guestCount })
+            });
+
+            if (!response.ok) {
+                throw new Error('QRコードの発行に失敗しました。');
+            }
+
+            const data = await response.json();
+
+            if (data.success) {
+                const resultCard = document.getElementById('qr-result-card');
+                const qrContainer = document.getElementById('generated-qr-code');
+                const titleEl = document.getElementById('qr-result-title');
+                
+                titleEl.textContent = `${data.table_name}様 QRコード`;
+                qrContainer.innerHTML = '';
+                new QRCode(qrContainer, {
+                    text: `${window.location.origin}/qr/${data.token}`,
+                    width: 250,
+                    height: 250
+                });
+                resultCard.style.display = 'block';
+            } else {
+                alert(data.message || 'エラーが発生しました。');
+            }
+        } catch (error) {
+            alert(error.message);
+        }
+    });
+</script>
 {% endblock %}
