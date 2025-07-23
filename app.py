@@ -6,7 +6,7 @@ from flask import Flask, render_template, request, redirect, url_for, jsonify, f
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from sqlalchemy import func, desc
+from sqlalchemy import func, desc, and_
 import pytz
 from collections import defaultdict
 
@@ -63,7 +63,7 @@ class Order(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     item_name = db.Column(db.String(100), nullable=False)
     item_price = db.Column(db.Integer, nullable=False)
-    status = db.Column(db.String(20), default='pending')
+    status = db.Column(db.String(20), default='pending') # pending -> served
     timestamp = db.Column(db.DateTime(timezone=True), default=lambda: datetime.datetime.now(JST))
     table_id = db.Column(db.Integer, db.ForeignKey('table.id'), nullable=False)
     session_id = db.Column(db.String(100))
@@ -120,14 +120,14 @@ def qr_auth(token):
 
 @app.route('/table/<int:table_id>')
 def table_menu(table_id):
-    if not session.get('table_id') == table_id and not current_user.is_authenticated:
+    if not session.get('table_id') == table_id and not (current_user and current_user.is_authenticated):
         abort(403)
     table = db.session.get(Table, table_id)
     if not table: abort(404)
-    menu_items = MenuItem.query.filter_by(active=True).all()
-    categorized_menu = {}
+    menu_items = MenuItem.query.filter_by(active=True).order_by(MenuItem.category).all()
+    categorized_menu = defaultdict(list)
     for item in menu_items:
-        categorized_menu.setdefault(item.category, []).append(item)
+        categorized_menu[item.category].append(item)
     return render_template('table_menu.html', table=table, categorized_menu=categorized_menu)
 
 # --- 管理者ページ ---
@@ -137,7 +137,7 @@ def login():
     if request.method == 'POST':
         user = User.query.filter_by(username=request.form['username']).first()
         if user and user.check_password(request.form['password']):
-            login_user(user)
+            login_user(user, remember=True)
             session['logged_in'] = True
             return redirect(url_for('dashboard'))
         flash('ユーザー名またはパスワードが違います。', 'error')
@@ -168,7 +168,8 @@ def admin_menu():
 @app.route('/admin/tables')
 @login_required
 def admin_tables():
-    return render_template('admin_tables.html', tables=Table.query.order_by(Table.name).all())
+    tables = Table.query.order_by(Table.name).all()
+    return render_template('admin_tables.html', tables=tables)
 
 @app.route('/admin/history')
 @login_required
@@ -181,6 +182,8 @@ def admin_guidance():
     return render_template('admin_guidance.html')
 
 # --- APIエンドポイント ---
+
+# Customer APIs
 @app.route('/api/order/submit', methods=['POST'])
 def submit_order():
     data = request.json
@@ -197,6 +200,7 @@ def submit_order():
             for _ in range(item_data['quantity']):
                 order = Order(item_name=menu_item.name, item_price=menu_item.price, table_id=table_id, session_id=session_id)
                 db.session.add(order)
+            menu_item.popularity_count += item_data['quantity']
     db.session.commit()
     return jsonify(success=True)
 
@@ -209,6 +213,7 @@ def api_customer_orders():
         return jsonify(success=True, orders=order_list, total=total)
     return jsonify(success=False, message="注文履歴がありません。")
 
+# Kitchen APIs
 @app.route('/api/kitchen/orders')
 @login_required
 def api_kitchen_orders():
@@ -245,6 +250,7 @@ def api_complete_order(session_id):
     db.session.commit()
     return jsonify(success=True)
 
+# Guidance APIs
 @app.route('/api/guidance/generate', methods=['POST'])
 @login_required
 def api_generate_guidance_qr():
@@ -264,6 +270,141 @@ def api_generate_guidance_qr():
     
     return jsonify(success=True, token=token, table_name=table_name)
 
+# Table Management APIs
+@app.route('/api/qr/generate/<int:table_id>', methods=['POST'])
+@login_required
+def api_generate_table_qr(table_id):
+    table = db.session.get(Table, table_id)
+    if not table:
+        return jsonify(success=False, message="Table not found"), 404
+    
+    table.active_qr_token = secrets.token_urlsafe(16)
+    table.qr_token_expiry = datetime.datetime.now(JST) + datetime.timedelta(hours=8)
+    db.session.commit()
+    
+    return jsonify(
+        success=True, 
+        token=table.active_qr_token, 
+        expiry=table.qr_token_expiry.isoformat()
+    )
+
+@app.route('/api/tables', methods=['POST'])
+@login_required
+def api_add_table():
+    data = request.json
+    name = data.get('name')
+    if not name:
+        return jsonify(success=False, message='Table name is required'), 400
+    if Table.query.filter_by(name=name).first():
+        return jsonify(success=False, message='Table name already exists'), 400
+    
+    new_table = Table(name=name)
+    db.session.add(new_table)
+    db.session.commit()
+    return jsonify(success=True, id=new_table.id, name=new_table.name)
+
+@app.route('/api/tables/<int:table_id>', methods=['DELETE'])
+@login_required
+def api_delete_table(table_id):
+    table = db.session.get(Table, table_id)
+    if not table:
+        return jsonify(success=False, message="Table not found"), 404
+    db.session.delete(table)
+    db.session.commit()
+    return jsonify(success=True)
+
+# Menu Management APIs
+@app.route('/api/menu/add', methods=['POST'])
+@login_required
+def api_add_menu_item():
+    data = request.json
+    name = data.get('name')
+    price = data.get('price')
+    category = data.get('category')
+    if not all([name, price, category]):
+        return jsonify(success=False, message='Missing data'), 400
+    
+    item = MenuItem(name=name, price=int(price), category=category)
+    db.session.add(item)
+    db.session.commit()
+    return jsonify(success=True)
+
+@app.route('/api/menu/<int:item_id>', methods=['DELETE'])
+@login_required
+def api_delete_menu_item(item_id):
+    item = db.session.get(MenuItem, item_id)
+    if not item:
+        return jsonify(success=False, message="Item not found"), 404
+    db.session.delete(item)
+    db.session.commit()
+    return jsonify(success=True)
+
+@app.route('/api/menu/toggle/<int:item_id>', methods=['POST'])
+@login_required
+def api_toggle_menu_item_active(item_id):
+    item = db.session.get(MenuItem, item_id)
+    if not item:
+        return jsonify(success=False, message="Item not found"), 404
+    item.active = not item.active
+    db.session.commit()
+    return jsonify(success=True, active=item.active)
+
+
+# Dashboard APIs
+@app.route('/api/stats/dashboard')
+@login_required
+def api_stats_dashboard():
+    today = datetime.datetime.now(JST).date()
+    start_of_day = datetime.datetime.combine(today, datetime.time.min).astimezone(JST)
+    
+    today_sales = db.session.query(func.sum(Order.item_price)).filter(Order.timestamp >= start_of_day).scalar() or 0
+    order_count = db.session.query(func.count(Order.id)).filter(Order.timestamp >= start_of_day).scalar() or 0
+    
+    table_stats = db.session.query(Table.status, func.count(Table.id)).group_by(Table.status).all()
+    table_stats_dict = {status: count for status, count in table_stats}
+
+    popular_items = db.session.query(MenuItem.name, MenuItem.popularity_count).order_by(MenuItem.popularity_count.desc()).limit(5).all()
+
+    return jsonify(
+        today_sales=today_sales,
+        order_count=order_count,
+        table_stats={'available': table_stats_dict.get('available', 0), 'occupied': table_stats_dict.get('occupied', 0)},
+        popular_items=[{'name': name, 'count': count} for name, count in popular_items]
+    )
+
+@app.route('/api/dashboard/sales')
+@login_required
+def api_dashboard_sales():
+    period = request.args.get('period', 'daily')
+    today = datetime.datetime.now(JST).date()
+    
+    if period == 'monthly':
+        start_date = today.replace(day=1) - datetime.timedelta(days=365) # Last 12 months
+        start_date = start_date.replace(day=1)
+        
+        sales_data = db.session.query(
+            func.date_trunc('month', Order.timestamp),
+            func.sum(Order.item_price)
+        ).filter(Order.timestamp >= start_date).group_by(func.date_trunc('month', Order.timestamp)).order_by(func.date_trunc('month', Order.timestamp)).all()
+
+        labels = [d.strftime("%Y-%m") for d, _ in sales_data]
+        sales = [s for _, s in sales_data]
+
+    else: # daily
+        start_date = today - datetime.timedelta(days=29)
+        
+        sales_data = db.session.query(
+            func.cast(Order.timestamp, db.Date),
+            func.sum(Order.item_price)
+        ).filter(func.cast(Order.timestamp, db.Date) >= start_date).group_by(func.cast(Order.timestamp, db.Date)).order_by(func.cast(Order.timestamp, db.Date)).all()
+        
+        date_to_sales = {d.strftime("%Y-%m-%d"): s for d, s in sales_data}
+        labels = [(start_date + datetime.timedelta(days=i)).strftime("%Y-%m-%d") for i in range(30)]
+        sales = [date_to_sales.get(label, 0) for label in labels]
+
+    return jsonify(labels=labels, sales=sales)
+
+
 # --- データベース初期化コマンド ---
 @app.cli.command("init-db")
 def init_db_command():
@@ -273,9 +414,21 @@ def init_db_command():
         admin_user = User(username='admin')
         admin_user.set_password('password123')
         db.session.add(admin_user)
+        # Add sample data
         db.session.add_all([Table(name=f'{i}番テーブル') for i in range(1, 6)])
+        
+        menu_items_data = [
+            {'name': 'ブレンドコーヒー', 'price': 500, 'category': 'ドリンク'},
+            {'name': 'カフェラテ', 'price': 600, 'category': 'ドリンク'},
+            {'name': 'チーズケーキ', 'price': 700, 'category': 'デザート'},
+            {'name': 'ナポリタン', 'price': 1200, 'category': 'フード'},
+        ]
+        for item_data in menu_items_data:
+            db.session.add(MenuItem(**item_data))
+
         db.session.commit()
-        print("データベースが初期化されました。")
+        print("データベースが初期化され、サンプルデータが追加されました。")
+        print("管理者アカウント: admin / password123")
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)
