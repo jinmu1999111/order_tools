@@ -1,5 +1,5 @@
 {% extends 'layout.html' %}
-{% block title %}お客様のご案内{% endblock %}
+{% block title %}案内管理{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -29,18 +29,18 @@
 
 {% block content %}
 <div class="page-container">
-    <h1 class="mb-4" style="font-size: 2.5rem;">💁‍♀️ お客様のご案内</h1>
+    <h1 class="mb-4" style="font-size: 2.5rem;">💁‍♀️ 案内管理</h1>
 
     <div class="card mb-4">
         <div class="card-header bg-transparent border-0 pt-3">
-            <h2>QRコード発行</h2>
+            <h2>一時QRコード発行</h2>
         </div>
         <div class="card-body">
-            <p class="card-text text-muted">お客様をご案内するテーブル名と人数を入力してQRコードを発行します。未登録のテーブル名も使用できます。</p>
+            <p class="card-text text-muted">お客様をご案内するテーブル名と人数を入力して、30分間有効なQRコードを発行します。</p>
             <form id="guidance-form" class="row g-3 align-items-end">
                 <div class="col-12 col-md">
                     <label for="table_name" class="form-label">テーブル名</label>
-                    <input type="text" id="table_name" name="table_name" class="form-control" placeholder="例: 窓際2番席" required>
+                    <input type="text" id="table_name" name="table_name" class="form-control" placeholder="例: テラス席A" required>
                 </div>
                 <div class="col-12 col-md-4">
                     <label for="guest_count" class="form-label">人数</label>
@@ -90,7 +90,7 @@
                 const titleEl = document.getElementById('qr-result-title');
                 
                 titleEl.textContent = `${data.table_name}様 QRコード`;
-                qrContainer.innerHTML = '';
+                qrContainer.innerHTML = ''; // 既存のQRをクリア
                 new QRCode(qrContainer, {
                     text: `${window.location.origin}/qr/${data.token}`,
                     width: 250,

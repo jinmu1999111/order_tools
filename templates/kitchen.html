@@ -58,13 +58,16 @@
     async function fetchOrders() {
         try {
             const response = await fetch('/api/kitchen/orders');
+            if (!response.ok) {
+                console.error("Network error");
+                return;
+            }
             const data = await response.json();
-            
             if (data.success) {
                 const newOrderIds = new Set(data.orders.map(o => o.session_id));
                 const isNewOrder = [...newOrderIds].some(id => !knownOrderIds.has(id));
 
-                if (isNewOrder && knownOrderIds.size > 0) { // 初回ロード時は鳴らさない
+                if (isNewOrder && knownOrderIds.size > 0) {
                     if(soundEnabled) playSound();
                 }
                 knownOrderIds = newOrderIds;

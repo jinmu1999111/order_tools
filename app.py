@@ -212,7 +212,7 @@ def api_customer_orders():
 @app.route('/api/kitchen/orders')
 @login_required
 def api_kitchen_orders():
-    orders_query = Order.query.filter(Order.status == 'pending').order_by(Order.timestamp.asc()).all()
+    orders_query = Order.query.filter_by(status='pending').order_by(Order.timestamp.asc()).all()
     
     orders_by_session = defaultdict(list)
     for o in orders_query:

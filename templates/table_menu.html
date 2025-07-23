@@ -151,7 +151,7 @@
             const response = await fetch('/api/order/submit', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ table_id: tableId, items: cart })
+                body: JSON.stringify({ items: cart })
             });
             
             if (response.ok) {

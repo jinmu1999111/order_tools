@@ -19,7 +19,6 @@
             --color-text: #5C4B3E;
             --color-primary: #D37544;
             --color-secondary: #A98F7A;
-            --color-accent: #E8A87C;
         }
 
         body {
@@ -34,20 +33,15 @@
             font-family: var(--font-main);
         }
         
-        .navbar-brand {
-            font-size: 2.2rem;
-        }
-
+        .navbar-brand { font-size: 2.2rem; }
         .navbar {
-            background-color: rgba(255, 255, 255, 0.9);
+            background-color: rgba(249, 245, 240, 0.9);
             backdrop-filter: blur(8px);
             border-bottom: 2px solid var(--color-secondary);
             height: 70px;
         }
         
-        .navbar-toggler {
-            border: none;
-        }
+        .navbar-toggler { border: none; }
         .navbar-toggler-icon {
             background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(92, 75, 62, 0.8)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
         }
@@ -72,11 +66,6 @@
         .btn-primary {
             background-color: var(--color-primary);
             border-color: var(--color-primary);
-            color: white;
-        }
-        .btn-primary:hover {
-            background-color: #C06A3D;
-            border-color: #C06A3D;
         }
     </style>
     {% block extra_css %}{% endblock %}
@@ -84,7 +73,7 @@
 <body>
     <nav class="navbar navbar-expand-lg navbar-light fixed-top">
         <div class="container-fluid">
-            <a class="navbar-brand" href="{% if session.get('qr_token') %}{{ url_for('table_menu', table_id=session.get('table_id')) }}{% else %}{{ url_for('index') }}{% endif %}">Moi</a>
+            <a class="navbar-brand" href="{% if session.get('table_id') and not session.get('logged_in') %}{{ url_for('table_menu', table_id=session.get('table_id')) }}{% else %}{{ url_for('index') }}{% endif %}">Moi</a>
             
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
@@ -105,8 +94,8 @@
                             </ul>
                         </li>
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('logout') }}">ログアウト</a></li>
-                    {% elif session.get('qr_token') %}
-                        <li class="nav-item"><span class="navbar-text">ご注文ありがとうございます</span></li>
+                    {% elif session.get('table_id') %}
+                         <li class="nav-item"><span class="navbar-text">ご注文ありがとうございます</span></li>
                     {% else %}
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('login') }}">管理者ログイン</a></li>
                     {% endif %}
@@ -116,16 +105,6 @@
     </nav>
     
     <main class="main-content container-fluid p-3 p-md-4">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-success alert-dismissible fade show" role="alert">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
         {% block content %}{% endblock %}
     </main>
     
