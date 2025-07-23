@@ -163,6 +163,40 @@ def admin_guidance():
     return render_template('admin_guidance.html')
 
 # --- APIエンドポイント ---
+@app.route('/api/menu/add', methods=['POST'])
+@login_required
+def api_add_menu_item():
+    data = request.json
+    name = data.get('name')
+    price = data.get('price')
+    category = data.get('category')
+    if name and price and category:
+        new_item = MenuItem(name=name, price=int(price), category=category)
+        db.session.add(new_item)
+        db.session.commit()
+        return jsonify(success=True, item={'id': new_item.id, 'name': new_item.name, 'price': new_item.price, 'category': new_item.category, 'active': new_item.active})
+    return jsonify(success=False, message='すべてのフィールドを入力してください。'), 400
+
+@app.route('/api/menu/<int:item_id>', methods=['DELETE'])
+@login_required
+def api_delete_menu_item(item_id):
+    item = db.session.get(MenuItem, item_id)
+    if item:
+        db.session.delete(item)
+        db.session.commit()
+        return jsonify(success=True)
+    return jsonify(success=False, message='Item not found'), 404
+
+@app.route('/api/menu/toggle/<int:item_id>', methods=['POST'])
+@login_required
+def api_toggle_menu_item(item_id):
+    item = db.session.get(MenuItem, item_id)
+    if item:
+        item.active = not item.active
+        db.session.commit()
+        return jsonify(success=True, active=item.active)
+    return jsonify(success=False, message='Item not found'), 404
+
 @app.route('/api/tables', methods=['POST'])
 @login_required
 def api_add_table():
@@ -201,63 +235,6 @@ def api_generate_qr(table_id):
         token=table.active_qr_token,
         expiry=table.qr_token_expiry.strftime('%Y-%m-%d %H:%M:%S')
     )
-
-@app.route('/api/order/submit', methods=['POST'])
-def submit_order():
-    data = request.get_json()
-    table = db.session.get(Table, data.get('table_id'))
-    if not table: return jsonify(success=False, message="テーブル情報がありません。"), 400
-    
-    session_id = secrets.token_hex(16)
-    
-    for item_id, item_data in data.get('items', {}).items():
-        menu_item = db.session.get(MenuItem, int(item_id))
-        if menu_item:
-            menu_item.popularity_count += item_data['quantity']
-            for _ in range(item_data['quantity']):
-                db.session.add(Order(item_name=item_data['name'], item_price=item_data['price'], table_id=table.id, session_id=session_id))
-    db.session.commit()
-    return jsonify(success=True)
-
-@app.route('/api/kitchen/orders')
-@login_required
-def api_kitchen_orders():
-    active_orders_query = Order.query.filter(Order.status.in_(['pending', 'cooking', 'served'])).order_by(Order.timestamp).all()
-    orders_by_session = defaultdict(list)
-    for order in active_orders_query:
-        orders_by_session[order.session_id].append(order)
-
-    orders_data = []
-    for session_id, items in orders_by_session.items():
-        if not items: continue
-        aggregated_items = defaultdict(lambda: {'quantity': 0, 'notes': ''})
-        for item in items: aggregated_items[item.item_name]['quantity'] += 1
-        
-        statuses = {item.status for item in items}
-        status_priority = ['pending', 'cooking', 'served']
-        group_status = 'served'
-        for s in status_priority:
-            if s in statuses:
-                group_status = s
-                break
-        
-        status_map_js = {'pending': 'pending', 'cooking': 'preparing', 'served': 'ready'}
-
-        orders_data.append({
-            'id': session_id,
-            'table_number': items[0].table.name,
-            'created_at': items[0].timestamp.isoformat(),
-            'status': status_map_js.get(group_status, 'pending'),
-            'items': [{'name': name, 'quantity': data['quantity'], 'notes': data['notes']} for name, data in aggregated_items.items()]
-        })
-
-    stats = {
-        "pending_orders": Order.query.filter_by(status='pending').count(),
-        "preparing_orders": Order.query.filter_by(status='cooking').count(),
-        "ready_orders": Order.query.filter_by(status='served').count(),
-        "total_orders": Order.query.filter(Order.timestamp >= datetime.datetime.now(JST).replace(hour=0, minute=0, second=0)).count()
-    }
-    return jsonify(success=True, orders=orders_data, stats=stats)
 
 # --- データベース初期化コマンド ---
 @app.cli.command("init-db")
