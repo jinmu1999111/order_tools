@@ -6,11 +6,65 @@
     <title>{% block title %}注文管理ツール{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <style>
+        .navbar-brand {
+            font-weight: bold;
+        }
+        .dropdown-menu {
+            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+        }
+        .alert {
+            border: none;
+            border-radius: 0.5rem;
+        }
+        .card {
+            border: none;
+            border-radius: 0.75rem;
+        }
+        .btn {
+            border-radius: 0.5rem;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+        }
+        .status-available { background-color: #28a745; }
+        .status-occupied { background-color: #dc3545; }
+        .status-cleaning { background-color: #ffc107; }
+        .status-reserved { background-color: #6f42c1; }
+        
+        /* 新規注文の点滅アニメーション */
+        @keyframes pulse {
+            0% { background-color: #fff3cd; }
+            50% { background-color: #ffeaa7; }
+            100% { background-color: #fff3cd; }
+        }
+        
+        .new-order {
+            animation: pulse 2s infinite;
+        }
+        
+        /* モバイル最適化 */
+        @media (max-width: 768px) {
+            .container {
+                padding-left: 10px;
+                padding-right: 10px;
+            }
+            .card-body {
+                padding: 1rem;
+            }
+        }
+    </style>
 </head>
 <body class="bg-light">
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
         <div class="container-fluid">
-            <a class="navbar-brand" href="{{ url_for('index') }}">注文管理ツール</a>
+            <a class="navbar-brand" href="{{ url_for('index') if current_user.is_authenticated else '#' }}">
+                <i class="bi bi-shop"></i> 注文管理ツール
+            </a>
             
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNavDropdown" aria-controls="navbarNavDropdown" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
@@ -19,42 +73,288 @@
             <div class="collapse navbar-collapse" id="navbarNavDropdown">
                 <ul class="navbar-nav ms-auto">
                     {% if current_user.is_authenticated %}
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('kitchen') }}">キッチン</a></li>
+                        <!-- キッチンビュー -->
+                        <li class="nav-item">
+                            <a class="nav-link {{ 'active' if request.endpoint == 'kitchen' }}" href="{{ url_for('kitchen') }}">
+                                <i class="bi bi-fire"></i> キッチン
+                            </a>
+                        </li>
+                        
+                        <!-- ご案内管理 -->
+                        <li class="nav-item">
+                            <a class="nav-link {{ 'active' if request.endpoint == 'admin_guidance' }}" href="{{ url_for('admin_guidance') }}">
+                                <i class="bi bi-person-plus"></i> ご案内
+                            </a>
+                        </li>
+                        
+                        <!-- 管理メニュー -->
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                管理
+                            <a class="nav-link dropdown-toggle {{ 'active' if request.endpoint in ['admin_menu', 'admin_tables', 'admin_history', 'admin_analytics', 'admin_security'] }}" 
+                               href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-gear"></i> 管理
                             </a>
                             <ul class="dropdown-menu dropdown-menu-end">
-                                <li><a class="dropdown-item" href="{{ url_for('admin_menu') }}">メニュー管理</a></li>
-                                <li><a class="dropdown-item" href="{{ url_for('admin_tables') }}">卓管理</a></li>
+                                <li>
+                                    <a class="dropdown-item {{ 'active' if request.endpoint == 'admin_menu' }}" href="{{ url_for('admin_menu') }}">
+                                        <i class="bi bi-card-list"></i> メニュー管理
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item {{ 'active' if request.endpoint == 'admin_tables' }}" href="{{ url_for('admin_tables') }}">
+                                        <i class="bi bi-table"></i> 卓管理
+                                    </a>
+                                </li>
                                 <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item" href="{{ url_for('admin_history') }}">注文履歴</a></li>
+                                <li>
+                                    <a class="dropdown-item {{ 'active' if request.endpoint == 'admin_history' }}" href="{{ url_for('admin_history') }}">
+                                        <i class="bi bi-clock-history"></i> 注文履歴
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item {{ 'active' if request.endpoint == 'admin_analytics' }}" href="{{ url_for('admin_analytics') }}">
+                                        <i class="bi bi-graph-up"></i> 売上統計
+                                    </a>
+                                </li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item {{ 'active' if request.endpoint == 'admin_security' }}" href="{{ url_for('admin_security') }}">
+                                        <i class="bi bi-shield-check"></i> セキュリティログ
+                                    </a>
+                                </li>
                             </ul>
                         </li>
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('logout') }}">ログアウト</a></li>
-                    {% else %}
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('login') }}">管理者ログイン</a></li>
+                        
+                        <!-- ユーザー情報とログアウト -->
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-person-circle"></i> {{ current_user.username }}
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><h6 class="dropdown-header">ユーザー: {{ current_user.username }}</h6></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item text-danger" href="{{ url_for('logout') }}">
+                                        <i class="bi bi-box-arrow-right"></i> ログアウト
+                                    </a>
+                                </li>
+                            </ul>
+                        </li>
                     {% endif %}
                 </ul>
             </div>
         </div>
     </nav>
 
-    <main class="container" style="padding-top: 70px;">
+    <main class="container-fluid" style="padding-top: 70px;">
+        <!-- フラッシュメッセージ -->
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
-                {% for category, message in messages %}
-                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                <div class="row">
+                    <div class="col-12">
+                        {% for category, message in messages %}
+                            <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                                {% if category == 'success' %}
+                                    <i class="bi bi-check-circle"></i>
+                                {% elif category == 'warning' %}
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                {% elif category == 'danger' or category == 'error' %}
+                                    <i class="bi bi-exclamation-octagon"></i>
+                                {% else %}
+                                    <i class="bi bi-info-circle"></i>
+                                {% endif %}
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        {% endfor %}
                     </div>
-                {% endfor %}
+                </div>
             {% endif %}
         {% endwith %}
+        
+        <!-- メインコンテンツ -->
         {% block content %}{% endblock %}
     </main>
 
+    <!-- フッター（管理者のみ表示） -->
+    {% if current_user.is_authenticated %}
+    <footer class="bg-dark text-light mt-5 py-3">
+        <div class="container-fluid">
+            <div class="row">
+                <div class="col-md-6">
+                    <small>
+                        <i class="bi bi-shield-check"></i> 
+                        管理者ログイン中: {{ current_user.username }} | 
+                        IP: {{ request.remote_addr }}
+                    </small>
+                </div>
+                <div class="col-md-6 text-end">
+                    <small>
+                        <i class="bi bi-clock"></i> 
+                        現在時刻: <span id="current-time"></span>
+                    </small>
+                </div>
+            </div>
+        </div>
+    </footer>
+    {% endif %}
+
+    <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- 共通のJavaScript -->
+    <script>
+        // 現在時刻の表示更新
+        function updateCurrentTime() {
+            const now = new Date();
+            const timeElement = document.getElementById('current-time');
+            if (timeElement) {
+                timeElement.textContent = now.toLocaleString('ja-JP', {
+                    year: 'numeric',
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+            }
+        }
+        
+        // 1秒ごとに時刻を更新
+        setInterval(updateCurrentTime, 1000);
+        updateCurrentTime(); // 初期表示
+        
+        // アラートの自動消去
+        document.addEventListener('DOMContentLoaded', function() {
+            const alerts = document.querySelectorAll('.alert');
+            alerts.forEach(function(alert) {
+                // 成功メッセージは3秒で自動消去
+                if (alert.classList.contains('alert-success')) {
+                    setTimeout(function() {
+                        const bsAlert = new bootstrap.Alert(alert);
+                        bsAlert.close();
+                    }, 3000);
+                }
+                // 情報メッセージは5秒で自動消去
+                else if (alert.classList.contains('alert-info')) {
+                    setTimeout(function() {
+                        const bsAlert = new bootstrap.Alert(alert);
+                        bsAlert.close();
+                    }, 5000);
+                }
+            });
+        });
+        
+        // 新規注文の通知音（管理者ページのみ）
+        {% if current_user.is_authenticated %}
+        let lastOrderCount = 0;
+        
+        async function checkNewOrders() {
+            try {
+                const response = await fetch('/api/kitchen_status');
+                const data = await response.json();
+                const currentOrderCount = data.pending_orders.length;
+                
+                // 新規注文があった場合
+                if (currentOrderCount > lastOrderCount && lastOrderCount > 0) {
+                    playNotificationSound();
+                    showNotification('新しい注文が入りました！', 'info');
+                }
+                
+                lastOrderCount = currentOrderCount;
+            } catch (error) {
+                console.log('注文チェックエラー:', error);
+            }
+        }
+        
+        // 通知音再生
+        function playNotificationSound() {
+            try {
+                // Web Audio APIを使った簡単な通知音
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+                oscillator.frequency.setValueAtTime(600, audioContext.currentTime + 0.1);
+                
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.3);
+            } catch (error) {
+                console.log('音声再生エラー:', error);
+            }
+        }
+        
+        // トースト通知表示
+        function showNotification(message, type = 'info') {
+            const toastHtml = `
+                <div class="toast align-items-center text-bg-${type} border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                    <div class="d-flex">
+                        <div class="toast-body">
+                            <i class="bi bi-bell"></i> ${message}
+                        </div>
+                        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+                    </div>
+                </div>
+            `;
+            
+            let toastContainer = document.getElementById('toast-container');
+            if (!toastContainer) {
+                toastContainer = document.createElement('div');
+                toastContainer.id = 'toast-container';
+                toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+                toastContainer.style.zIndex = '1080';
+                document.body.appendChild(toastContainer);
+            }
+            
+            toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+            const toastElement = toastContainer.lastElementChild;
+            const toast = new bootstrap.Toast(toastElement);
+            toast.show();
+        }
+        
+        // 10秒ごとに新規注文をチェック
+        setInterval(checkNewOrders, 10000);
+        checkNewOrders(); // 初回実行
+        {% endif %}
+        
+        // エラーハンドリング
+        window.addEventListener('error', function(e) {
+            console.error('JavaScript エラー:', e.error);
+        });
+        
+        // 未保存の変更警告（フォームがある場合）
+        let formChanged = false;
+        document.addEventListener('DOMContentLoaded', function() {
+            const forms = document.querySelectorAll('form');
+            forms.forEach(function(form) {
+                const inputs = form.querySelectorAll('input, select, textarea');
+                inputs.forEach(function(input) {
+                    input.addEventListener('change', function() {
+                        formChanged = true;
+                    });
+                });
+                
+                form.addEventListener('submit', function() {
+                    formChanged = false;
+                });
+            });
+        });
+        
+        window.addEventListener('beforeunload', function(e) {
+            if (formChanged) {
+                e.preventDefault();
+                e.returnValue = '未保存の変更があります。本当にページを離れますか？';
+            }
+        });
+    </script>
+    
+    <!-- ページ固有のスクリプト -->
     {% block scripts %}{% endblock %}
 </body>
 </html>

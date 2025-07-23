@@ -1,0 +1,290 @@
+{% extends "layout.html" %}
+{% block title %}案内管理{% endblock %}
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0"><i class="bi bi-person-plus"></i> 新規ご案内</h4>
+                </div>
+                <div class="card-body">
+                    <form id="guidanceForm">
+                        <div class="row">
+                            <div class="col-md-8 mb-3">
+                                <label for="tableName" class="form-label">席名・テーブル名</label>
+                                <input type="text" class="form-control form-control-lg" id="tableName" 
+                                       placeholder="例: 3番テーブル, カウンター席A" required>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label for="guestCount" class="form-label">人数</label>
+                                <input type="number" class="form-control form-control-lg" id="guestCount" 
+                                       min="1" max="20" value="2" required>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-success btn-lg w-100">
+                            <i class="bi bi-qr-code"></i> QRコードを生成
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- 案内待ちリスト -->
+            <div class="card shadow-sm mt-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="bi bi-clock-history"></i> 案内待ち一覧</h5>
+                </div>
+                <div class="card-body">
+                    {% if active_sessions %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>席名</th>
+                                        <th>人数</th>
+                                        <th>案内時刻</th>
+                                        <th>有効期限</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for session in active_sessions %}
+                                    <tr>
+                                        <td><strong>{{ session.table_name }}</strong></td>
+                                        <td>{{ session.guest_count }}名</td>
+                                        <td>{{ session.qr_generated_at.strftime('%H:%M') }}</td>
+                                        <td>
+                                            <span class="badge bg-warning">
+                                                {{ session.expires_at.strftime('%H:%M') }}まで
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <button class="btn btn-primary btn-sm" 
+                                                    onclick="completeGuidance({{ session.id }}, '{{ session.table_name }}')">
+                                                <i class="bi bi-check-circle"></i> ご案内済み
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <p class="text-muted text-center py-3">
+                            <i class="bi bi-inbox"></i> 現在案内待ちのお客様はいません
+                        </p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <!-- QRコード表示エリア -->
+            <div class="card shadow-sm" id="qrDisplay" style="display: none;">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0"><i class="bi bi-qr-code"></i> お客様用QRコード</h4>
+                </div>
+                <div class="card-body text-center">
+                    <div class="mb-3">
+                        <h3 id="displayTableName" class="text-primary"></h3>
+                        <p class="text-muted">人数: <span id="displayGuestCount"></span>名</p>
+                        <p class="text-muted">有効期限: <span id="displayExpiration"></span></p>
+                    </div>
+                    
+                    <div id="qrcode" class="d-flex justify-content-center mb-4"></div>
+                    
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> 
+                        お客様にこのQRコードを読み取ってもらい、席に案内してください。
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-primary btn-lg" id="completeGuidanceBtn">
+                            <i class="bi bi-check-circle"></i> ご案内完了
+                        </button>
+                        <button class="btn btn-outline-secondary" onclick="cancelGuidance()">
+                            <i class="bi bi-x-circle"></i> キャンセル
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 使い方ガイド -->
+            <div class="card shadow-sm" id="guideCard">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0"><i class="bi bi-question-circle"></i> 使い方</h5>
+                </div>
+                <div class="card-body">
+                    <ol class="mb-0">
+                        <li class="mb-2">席名と人数を入力して<strong>「QRコードを生成」</strong>をクリック</li>
+                        <li class="mb-2">表示されたQRコードをお客様に読み取ってもらう</li>
+                        <li class="mb-2">お客様を席に案内後、<strong>「ご案内完了」</strong>をクリック</li>
+                        <li class="mb-0">お客様がメニューページにアクセス可能になります</li>
+                    </ol>
+                    
+                    <div class="alert alert-warning mt-3 mb-0">
+                        <small>
+                            <i class="bi bi-exclamation-triangle"></i> 
+                            QRコードは30分で自動的に無効になります
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 音声通知用（隠し要素） -->
+<audio id="notificationSound" preload="auto">
+    <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeSsFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAaBzOH0fPTeS" type="audio/wav">
+</audio>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script>
+let currentSessionId = null;
+let qrCodeInstance = null;
+
+// フォーム送信処理
+document.getElementById('guidanceForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const tableName = document.getElementById('tableName').value;
+    const guestCount = document.getElementById('guestCount').value;
+    
+    if (!tableName || !guestCount) {
+        alert('席名と人数を入力してください。');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/guidance/create', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                table_name: tableName,
+                guest_count: parseInt(guestCount)
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            showQRCode(data.session_id, tableName, guestCount, data.qr_url, data.expires_at);
+            // フォームをリセット
+            document.getElementById('guidanceForm').reset();
+        } else {
+            alert('QRコード生成に失敗しました: ' + data.message);
+        }
+    } catch (error) {
+        alert('エラーが発生しました: ' + error.message);
+    }
+});
+
+// QRコード表示
+function showQRCode(sessionId, tableName, guestCount, qrUrl, expiresAt) {
+    currentSessionId = sessionId;
+    
+    // 表示内容を更新
+    document.getElementById('displayTableName').textContent = tableName;
+    document.getElementById('displayGuestCount').textContent = guestCount;
+    document.getElementById('displayExpiration').textContent = 
+        new Date(expiresAt).toLocaleTimeString('ja-JP', {hour: '2-digit', minute: '2-digit'});
+    
+    // QRコードを生成
+    const qrContainer = document.getElementById('qrcode');
+    qrContainer.innerHTML = '';
+    qrCodeInstance = new QRCode(qrContainer, {
+        text: qrUrl,
+        width: 256,
+        height: 256,
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.H
+    });
+    
+    // ご案内完了ボタンにイベントリスナーを設定
+    document.getElementById('completeGuidanceBtn').onclick = function() {
+        completeGuidance(sessionId, tableName);
+    };
+    
+    // 表示切り替え
+    document.getElementById('qrDisplay').style.display = 'block';
+    document.getElementById('guideCard').style.display = 'none';
+    
+    // 通知音を再生
+    playNotificationSound();
+}
+
+// ご案内完了処理
+async function completeGuidance(sessionId, tableName) {
+    if (!confirm(`「${tableName}」のご案内を完了しますか？`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/guidance/complete/${sessionId}`, {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert(`「${tableName}」のご案内が完了しました！\nお客様がメニューにアクセス可能になりました。`);
+            cancelGuidance();
+            // ページを更新して案内待ちリストを更新
+            window.location.reload();
+        } else {
+            alert('ご案内完了の処理に失敗しました: ' + data.message);
+        }
+    } catch (error) {
+        alert('エラーが発生しました: ' + error.message);
+    }
+}
+
+// QRコード表示をキャンセル
+function cancelGuidance() {
+    document.getElementById('qrDisplay').style.display = 'none';
+    document.getElementById('guideCard').style.display = 'block';
+    currentSessionId = null;
+    qrCodeInstance = null;
+}
+
+// 通知音再生
+function playNotificationSound() {
+    try {
+        document.getElementById('notificationSound').play();
+    } catch (error) {
+        // 音声再生エラーは無視
+    }
+}
+
+// 定期的に案内待ちリストを更新
+setInterval(function() {
+    if (currentSessionId === null) {
+        window.location.reload();
+    }
+}, 30000); // 30秒ごと
+
+// キーボードショートカット
+document.addEventListener('keydown', function(e) {
+    // Ctrl + Enter でフォーム送信
+    if (e.ctrlKey && e.key === 'Enter') {
+        document.getElementById('guidanceForm').dispatchEvent(new Event('submit'));
+    }
+    
+    // Escape でキャンセル
+    if (e.key === 'Escape' && currentSessionId !== null) {
+        cancelGuidance();
+    }
+});
+
+// ページ読み込み時にフォーカスを設定
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('tableName').focus();
+});
+</script>
+{% endblock %}

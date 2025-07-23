@@ -2,56 +2,440 @@
 {% block title %}キッチン伝票{% endblock %}
 {% block content %}
 <div class="container-fluid">
-    <h1 class="mb-4">🍳 キッチン伝票 (調理待ち)</h1>
-    <div id="pending-orders-grid" class="row">
+    <div class="row mb-4">
+        <div class="col-md-8">
+            <h1 class="mb-0">
+                <i class="bi bi-fire"></i> キッチン伝票
+                <span class="badge bg-warning text-dark ms-2" id="pending-count">0</span>
+            </h1>
         </div>
+        <div class="col-md-4 text-end">
+            <div class="btn-group" role="group">
+                <button type="button" class="btn btn-outline-primary" onclick="updateKitchenStatus()" title="手動更新">
+                    <i class="bi bi-arrow-clockwise"></i>
+                </button>
+                <button type="button" class="btn btn-outline-info" onclick="toggleAutoUpdate()" id="auto-update-btn" title="自動更新切替">
+                    <i class="bi bi-pause"></i> 自動更新
+                </button>
+                <button type="button" class="btn btn-outline-success" onclick="markAllReady()" title="全て調理完了">
+                    <i class="bi bi-check-all"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ステータス別タブ -->
+    <ul class="nav nav-tabs mb-4" id="statusTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="pending-tab" data-bs-toggle="tab" data-bs-target="#pending" 
+                    type="button" role="tab" aria-controls="pending" aria-selected="true">
+                <i class="bi bi-clock-history"></i> 調理待ち <span class="badge bg-danger ms-1" id="pending-badge">0</span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="preparing-tab" data-bs-toggle="tab" data-bs-target="#preparing" 
+                    type="button" role="tab" aria-controls="preparing" aria-selected="false">
+                <i class="bi bi-fire"></i> 調理中 <span class="badge bg-warning ms-1" id="preparing-badge">0</span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="ready-tab" data-bs-toggle="tab" data-bs-target="#ready" 
+                    type="button" role="tab" aria-controls="ready" aria-selected="false">
+                <i class="bi bi-check-circle"></i> 調理完了 <span class="badge bg-success ms-1" id="ready-badge">0</span>
+            </button>
+        </li>
+    </ul>
+
+    <!-- タブコンテンツ -->
+    <div class="tab-content" id="statusTabContent">
+        <!-- 調理待ち -->
+        <div class="tab-pane fade show active" id="pending" role="tabpanel" aria-labelledby="pending-tab">
+            <div class="row" id="pending-orders-grid">
+                <!-- 調理待ち注文がここに表示される -->
+            </div>
+        </div>
+        
+        <!-- 調理中 -->
+        <div class="tab-pane fade" id="preparing" role="tabpanel" aria-labelledby="preparing-tab">
+            <div class="row" id="preparing-orders-grid">
+                <!-- 調理中注文がここに表示される -->
+            </div>
+        </div>
+        
+        <!-- 調理完了 -->
+        <div class="tab-pane fade" id="ready" role="tabpanel" aria-labelledby="ready-tab">
+            <div class="row" id="ready-orders-grid">
+                <!-- 調理完了注文がここに表示される -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 確認モーダル -->
+<div class="modal fade" id="confirmModal" tabindex="-1" aria-labelledby="confirmModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="confirmModalLabel">確認</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="confirmModalBody">
+                <!-- 確認メッセージがここに表示される -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                <button type="button" class="btn btn-primary" id="confirmAction">実行</button>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    async function serveOrder(orderId) {
-        await fetch('/api/order/serve', {
+let autoUpdateEnabled = true;
+let autoUpdateInterval;
+let lastUpdateTime = null;
+
+// ステータス更新
+async function updateOrderStatus(orderId, newStatus) {
+    try {
+        const response = await fetch('/api/order/update_status', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ order_id: orderId })
+            body: JSON.stringify({ order_id: orderId, status: newStatus })
         });
-        updateKitchenStatus();
+        
+        if (response.ok) {
+            updateKitchenStatus();
+            showNotification(`注文ステータスを「${getStatusText(newStatus)}」に更新しました`, 'success');
+        } else {
+            showNotification('ステータス更新に失敗しました', 'danger');
+        }
+    } catch (error) {
+        showNotification('エラーが発生しました', 'danger');
     }
+}
 
-    async function updateKitchenStatus() {
+// ステータスの日本語テキスト取得
+function getStatusText(status) {
+    const statusMap = {
+        'pending': '調理待ち',
+        'preparing': '調理中',
+        'ready': '調理完了',
+        'served': '提供済み'
+    };
+    return statusMap[status] || status;
+}
+
+// ステータスに応じたボタンクラス取得
+function getStatusButtonClass(status) {
+    const classMap = {
+        'pending': 'btn-warning',
+        'preparing': 'btn-info',
+        'ready': 'btn-success'
+    };
+    return classMap[status] || 'btn-secondary';
+}
+
+// キッチンステータス更新
+async function updateKitchenStatus() {
+    try {
         const response = await fetch('/api/kitchen_status');
         const data = await response.json();
-        const grid = document.getElementById('pending-orders-grid');
-        grid.innerHTML = '';
-
-        if (data.pending_orders.length === 0) {
-            grid.innerHTML = '<div class="col-12"><p class="text-center text-muted fs-4 mt-5">新しい注文はありません。</p></div>';
-            return;
-        }
-
+        
+        // ステータス別に注文を分類
+        const ordersByStatus = {
+            pending: [],
+            preparing: [],
+            ready: []
+        };
+        
         data.pending_orders.forEach(order => {
-            const col = document.createElement('div');
-            col.className = 'col-lg-3 col-md-4 col-sm-6 mb-4';
-            col.innerHTML = `
-                <div class="card h-100 shadow-sm">
-                    <div class="card-header fw-bold fs-5">${order.table_name}</div>
-                    <div class="card-body">
-                        <h5 class="card-title fs-4">${order.item_name}</h5>
-                        <p class="card-text text-muted">受付: ${order.timestamp}</p>
-                    </div>
-                    <div class="card-footer p-2">
-                        <button class="btn btn-success w-100 fw-bold" onclick="serveOrder(${order.id})">
-                            提供OK
+            if (ordersByStatus[order.status]) {
+                ordersByStatus[order.status].push(order);
+            }
+        });
+        
+        // 各ステータスのグリッドを更新
+        updateOrderGrid('pending', ordersByStatus.pending);
+        updateOrderGrid('preparing', ordersByStatus.preparing);
+        updateOrderGrid('ready', ordersByStatus.ready);
+        
+        // バッジ数を更新
+        document.getElementById('pending-badge').textContent = ordersByStatus.pending.length;
+        document.getElementById('preparing-badge').textContent = ordersByStatus.preparing.length;
+        document.getElementById('ready-badge').textContent = ordersByStatus.ready.length;
+        document.getElementById('pending-count').textContent = 
+            ordersByStatus.pending.length + ordersByStatus.preparing.length;
+        
+        lastUpdateTime = new Date();
+        
+    } catch (error) {
+        console.error('キッチンステータス更新エラー:', error);
+        showNotification('ステータス更新に失敗しました', 'danger');
+    }
+}
+
+// 注文グリッド更新
+function updateOrderGrid(status, orders) {
+    const grid = document.getElementById(`${status}-orders-grid`);
+    grid.innerHTML = '';
+    
+    if (orders.length === 0) {
+        grid.innerHTML = `
+            <div class="col-12">
+                <div class="text-center py-5 text-muted">
+                    <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                    <p class="mt-3 mb-0">「${getStatusText(status)}」の注文はありません</p>
+                </div>
+            </div>
+        `;
+        return;
+    }
+    
+    orders.forEach(order => {
+        const col = document.createElement('div');
+        col.className = 'col-xl-3 col-lg-4 col-md-6 mb-4';
+        
+        // 受付からの経過時間を計算
+        const orderTime = new Date(order.timestamp + 'Z'); // UTCとして解釈
+        const now = new Date();
+        const elapsedMinutes = Math.floor((now - orderTime) / (1000 * 60));
+        
+        // 経過時間に応じた警告色
+        let timeClass = 'text-muted';
+        if (elapsedMinutes > 15) timeClass = 'text-danger fw-bold';
+        else if (elapsedMinutes > 10) timeClass = 'text-warning fw-bold';
+        
+        // 次のステータスボタン
+        let nextStatusButton = '';
+        switch (status) {
+            case 'pending':
+                nextStatusButton = `
+                    <button class="btn btn-info w-100 mb-2" onclick="updateOrderStatus(${order.id}, 'preparing')">
+                        <i class="bi bi-fire"></i> 調理開始
+                    </button>
+                `;
+                break;
+            case 'preparing':
+                nextStatusButton = `
+                    <button class="btn btn-success w-100 mb-2" onclick="updateOrderStatus(${order.id}, 'ready')">
+                        <i class="bi bi-check-circle"></i> 調理完了
+                    </button>
+                `;
+                break;
+            case 'ready':
+                nextStatusButton = `
+                    <button class="btn btn-primary w-100 mb-2" onclick="updateOrderStatus(${order.id}, 'served')">
+                        <i class="bi bi-check-square"></i> 提供完了
+                    </button>
+                `;
+                break;
+        }
+        
+        col.innerHTML = `
+            <div class="card h-100 shadow-sm ${elapsedMinutes > 15 ? 'border-danger' : elapsedMinutes > 10 ? 'border-warning' : ''}">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0 fw-bold">${order.table_name}</h6>
+                    <span class="badge ${getStatusButtonClass(status).replace('btn-', 'bg-')}">${getStatusText(status)}</span>
+                </div>
+                <div class="card-body">
+                    <h5 class="card-title">${order.item_name}</h5>
+                    ${order.quantity > 1 ? `<p class="text-muted mb-2"><i class="bi bi-x"></i> ${order.quantity}</p>` : ''}
+                    ${order.notes ? `<div class="alert alert-info p-2 mb-2"><small><i class="bi bi-chat-quote"></i> ${order.notes}</small></div>` : ''}
+                    <p class="card-text ${timeClass}">
+                        <i class="bi bi-clock"></i> 受付: ${order.timestamp}
+                        <br><small>経過: ${elapsedMinutes}分</small>
+                    </p>
+                </div>
+                <div class="card-footer p-2">
+                    ${nextStatusButton}
+                    <div class="btn-group w-100" role="group">
+                        ${status !== 'pending' ? `<button class="btn btn-outline-warning btn-sm" onclick="updateOrderStatus(${order.id}, 'pending')" title="調理待ちに戻す"><i class="bi bi-arrow-left"></i></button>` : ''}
+                        <button class="btn btn-outline-danger btn-sm" onclick="confirmServeOrder(${order.id}, '${order.item_name}', '${order.table_name}')" title="直接提供完了">
+                            <i class="bi bi-check-all"></i>
                         </button>
                     </div>
                 </div>
-            `;
-            grid.appendChild(col);
-        });
-    }
+            </div>
+        `;
+        grid.appendChild(col);
+    });
+}
 
-    document.addEventListener('DOMContentLoaded', updateKitchenStatus);
-    setInterval(updateKitchenStatus, 5000); // 5秒ごとに更新
+// 提供完了確認
+function confirmServeOrder(orderId, itemName, tableName) {
+    document.getElementById('confirmModalLabel').textContent = '提供完了確認';
+    document.getElementById('confirmModalBody').innerHTML = `
+        <p><strong>${tableName}</strong> の <strong>${itemName}</strong> を提供完了にしますか？</p>
+        <div class="alert alert-warning">
+            <i class="bi bi-exclamation-triangle"></i> この操作により注文はキッチンビューから削除されます
+        </div>
+    `;
+    
+    document.getElementById('confirmAction').onclick = function() {
+        updateOrderStatus(orderId, 'served');
+        bootstrap.Modal.getInstance(document.getElementById('confirmModal')).hide();
+    };
+    
+    new bootstrap.Modal(document.getElementById('confirmModal')).show();
+}
+
+// 全て調理完了
+function markAllReady() {
+    const pendingOrders = document.querySelectorAll('#pending-orders-grid .card');
+    const preparingOrders = document.querySelectorAll('#preparing-orders-grid .card');
+    
+    if (pendingOrders.length === 0 && preparingOrders.length === 0) {
+        showNotification('調理待ち・調理中の注文がありません', 'info');
+        return;
+    }
+    
+    document.getElementById('confirmModalLabel').textContent = '一括調理完了';
+    document.getElementById('confirmModalBody').innerHTML = `
+        <p>調理待ち・調理中の全ての注文を「調理完了」にしますか？</p>
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> ${pendingOrders.length + preparingOrders.length}件の注文が対象です
+        </div>
+    `;
+    
+    document.getElementById('confirmAction').onclick = async function() {
+        try {
+            const allOrders = [...pendingOrders, ...preparingOrders];
+            for (const orderCard of allOrders) {
+                const readyButton = orderCard.querySelector('[onclick*="ready"]');
+                if (readyButton) {
+                    const match = readyButton.getAttribute('onclick').match(/updateOrderStatus\((\d+), 'ready'\)/);
+                    if (match) {
+                        await updateOrderStatus(parseInt(match[1]), 'ready');
+                    }
+                }
+            }
+            showNotification('全ての注文を調理完了にしました', 'success');
+        } catch (error) {
+            showNotification('一括更新でエラーが発生しました', 'danger');
+        }
+        
+        bootstrap.Modal.getInstance(document.getElementById('confirmModal')).hide();
+    };
+    
+    new bootstrap.Modal(document.getElementById('confirmModal')).show();
+}
+
+// 自動更新の切り替え
+function toggleAutoUpdate() {
+    autoUpdateEnabled = !autoUpdateEnabled;
+    const btn = document.getElementById('auto-update-btn');
+    
+    if (autoUpdateEnabled) {
+        btn.innerHTML = '<i class="bi bi-pause"></i> 自動更新';
+        btn.className = 'btn btn-outline-info';
+        startAutoUpdate();
+    } else {
+        btn.innerHTML = '<i class="bi bi-play"></i> 自動更新';
+        btn.className = 'btn btn-outline-secondary';
+        stopAutoUpdate();
+    }
+}
+
+// 自動更新開始
+function startAutoUpdate() {
+    if (autoUpdateInterval) clearInterval(autoUpdateInterval);
+    autoUpdateInterval = setInterval(updateKitchenStatus, 5000);
+}
+
+// 自動更新停止
+function stopAutoUpdate() {
+    if (autoUpdateInterval) {
+        clearInterval(autoUpdateInterval);
+        autoUpdateInterval = null;
+    }
+}
+
+// 通知表示
+function showNotification(message, type = 'info') {
+    // layoutで定義されたshowNotification関数を使用
+    if (typeof window.showNotification === 'function') {
+        window.showNotification(message, type);
+    } else {
+        alert(message); // フォールバック
+    }
+}
+
+// キーボードショートカット
+document.addEventListener('keydown', function(e) {
+    // R キーで更新
+    if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        updateKitchenStatus();
+    }
+    
+    // スペースキーで自動更新切り替え
+    if (e.key === ' ' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        toggleAutoUpdate();
+    }
+    
+    // 数字キーでタブ切り替え
+    if (e.key >= '1' && e.key <= '3') {
+        e.preventDefault();
+        const tabs = ['pending-tab', 'preparing-tab', 'ready-tab'];
+        const targetTab = document.getElementById(tabs[parseInt(e.key) - 1]);
+        if (targetTab) {
+            targetTab.click();
+        }
+    }
+});
+
+// タブ切り替え時の処理
+document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
+    tab.addEventListener('shown.bs.tab', function(e) {
+        // アクティブなタブに応じてキーボードフォーカスを設定
+        const targetId = e.target.getAttribute('data-bs-target');
+        const targetPane = document.querySelector(targetId);
+        if (targetPane) {
+            const firstButton = targetPane.querySelector('button');
+            if (firstButton) {
+                setTimeout(() => firstButton.focus(), 100);
+            }
+        }
+    });
+});
+
+// ページの可視性変更時の処理
+document.addEventListener('visibilitychange', function() {
+    if (document.hidden) {
+        // ページが非表示になったら自動更新を停止
+        if (autoUpdateEnabled) {
+            stopAutoUpdate();
+        }
+    } else {
+        // ページが表示されたら自動更新を再開
+        if (autoUpdateEnabled) {
+            updateKitchenStatus(); // 即座に更新
+            startAutoUpdate();
+        }
+    }
+});
+
+// ページ読み込み時の初期化
+document.addEventListener('DOMContentLoaded', function() {
+    updateKitchenStatus();
+    if (autoUpdateEnabled) {
+        startAutoUpdate();
+    }
+    
+    // ツールチップを初期化
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[title]'));
+    tooltipTriggerList.map(function(tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+
+// ページを離れる前に自動更新を停止
+window.addEventListener('beforeunload', function() {
+    stopAutoUpdate();
+});
 </script>
 {% endblock %}
