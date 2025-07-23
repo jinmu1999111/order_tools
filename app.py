@@ -8,12 +8,12 @@ from flask_login import LoginManager, UserMixin, login_user, logout_user, login_
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import func, desc
 import pytz
+from collections import defaultdict
 
 # --- アプリケーションとデータベースの初期設定 ---
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
 
-# RenderのDATABASE_URL形式に対応しつつ、ローカルでのテストも考慮
 db_url = os.environ.get('DATABASE_URL', 'sqlite:///instance/test.db')
 if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
@@ -21,7 +21,6 @@ app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(hours=8)
 
-# ローカルでSQLiteを使用する場合のinstanceフォルダ作成
 if 'sqlite' in app.config['SQLALCHEMY_DATABASE_URI']:
     instance_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance')
     os.makedirs(instance_path, exist_ok=True)
@@ -66,7 +65,7 @@ class Order(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     item_name = db.Column(db.String(100), nullable=False)
     item_price = db.Column(db.Integer, nullable=False)
-    status = db.Column(db.String(20), default='pending')
+    status = db.Column(db.String(20), default='pending') # pending, cooking, served, cancelled
     timestamp = db.Column(db.DateTime, default=lambda: datetime.datetime.now(JST))
     table_id = db.Column(db.Integer, db.ForeignKey('table.id'), nullable=False)
     session_id = db.Column(db.String(100))
@@ -84,7 +83,11 @@ class QRToken(db.Model):
         expiry = self.created_at + datetime.timedelta(minutes=30)
         return datetime.datetime.now(JST) < expiry
 
-# --- デコレータ ---
+# --- ルートとロジック ---
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
 def require_qr_token(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -98,12 +101,6 @@ def require_qr_token(f):
         return redirect(url_for('index'))
     return decorated_function
 
-# --- ログインマネージャー ---
-@login_manager.user_loader
-def load_user(user_id):
-    return User.query.get(int(user_id))
-
-# --- メインルート ---
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -162,7 +159,13 @@ def logout():
 @app.route('/kitchen')
 @login_required
 def kitchen():
-    return render_template('kitchen.html')
+    stats = {
+        "pending_orders": Order.query.filter_by(status='pending').count(),
+        "preparing_orders": Order.query.filter_by(status='cooking').count(),
+        "ready_orders": Order.query.filter_by(status='served').count(),
+        "total_orders": Order.query.filter(Order.timestamp >= datetime.datetime.now(JST).replace(hour=0, minute=0, second=0)).count()
+    }
+    return render_template('kitchen.html', stats=stats)
 
 @app.route('/dashboard')
 @login_required
@@ -172,7 +175,7 @@ def dashboard():
 @app.route('/admin/menu')
 @login_required
 def admin_menu():
-    return render_template('admin_menu.html', menu_items=MenuItem.query.all())
+    return render_template('admin_menu.html', menu_items=MenuItem.query.order_by(MenuItem.category, MenuItem.name).all())
 
 @app.route('/admin/menu/add', methods=['POST'])
 @login_required
@@ -185,7 +188,7 @@ def add_menu_item():
 @app.route('/admin/tables')
 @login_required
 def admin_tables():
-    return render_template('admin_tables.html', tables=Table.query.all())
+    return render_template('admin_tables.html', tables=Table.query.order_by(Table.name).all())
 
 @app.route('/admin/tables/add', methods=['POST'])
 @login_required
@@ -199,30 +202,114 @@ def add_table():
         flash('その名前は既に使用されているか、空です。', 'danger')
     return redirect(url_for('admin_tables'))
     
+@app.route('/admin/tables/update_status/<int:table_id>', methods=['POST'])
+@login_required
+def update_table_status(table_id):
+    table = db.session.get(Table, table_id)
+    if table:
+        table.status = request.form.get('status')
+        if table.status == 'available':
+            table.current_session_id = None
+            table.guest_count = 0
+        db.session.commit()
+        flash(f'テーブル「{table.name}」のステータスを更新しました。', 'success')
+    return redirect(url_for('admin_tables'))
+
 @app.route('/admin/history')
 @login_required
 def admin_history():
-    return render_template('admin_history.html', tables=Table.query.all())
+    return render_template('admin_history.html', tables=Table.query.order_by(Table.name).all())
 
 @app.route('/admin/guidance')
 @login_required
 def admin_guidance():
     return render_template('admin_guidance.html')
 
-# --- APIエンドポイント ---
+@app.route('/admin/guidance/create', methods=['POST'])
+@login_required
+def create_guidance():
+    token = secrets.token_urlsafe(16)
+    new_qr = QRToken(
+        token=token,
+        table_name=request.form.get('table_name'),
+        guest_count=request.form.get('guest_count')
+    )
+    db.session.add(new_qr)
+    db.session.commit()
+    flash('新しい案内QRコードを生成しました。', 'success')
+    return redirect(url_for('admin_guidance'))
 
+# --- APIエンドポイント ---
 @app.route('/api/order/submit', methods=['POST'])
 @require_qr_token
 def submit_order():
     data = request.get_json()
     table = db.session.get(Table, data.get('table_id'))
     if not table: return jsonify(success=False, message="テーブル情報がありません。"), 400
+    
+    session_id = secrets.token_hex(16)
+    
     for item_id, item_data in data.get('items', {}).items():
         menu_item = db.session.get(MenuItem, int(item_id))
         if menu_item:
             menu_item.popularity_count += item_data['quantity']
             for _ in range(item_data['quantity']):
-                db.session.add(Order(item_name=item_data['name'], item_price=item_data['price'], table_id=table.id, session_id=session.get('qr_token')))
+                db.session.add(Order(item_name=item_data['name'], item_price=item_data['price'], table_id=table.id, session_id=session_id))
+    db.session.commit()
+    return jsonify(success=True)
+
+@app.route('/api/kitchen/orders')
+@login_required
+def api_kitchen_orders():
+    active_orders_query = Order.query.filter(Order.status.in_(['pending', 'cooking', 'served'])).order_by(Order.timestamp).all()
+    orders_by_session = defaultdict(list)
+    for order in active_orders_query:
+        orders_by_session[order.session_id].append(order)
+
+    orders_data = []
+    for session_id, items in orders_by_session.items():
+        if not items: continue
+        aggregated_items = defaultdict(lambda: {'quantity': 0, 'notes': ''})
+        for item in items: aggregated_items[item.item_name]['quantity'] += 1
+        
+        statuses = {item.status for item in items}
+        status_priority = ['pending', 'cooking', 'served']
+        group_status = 'served'
+        for s in status_priority:
+            if s in statuses:
+                group_status = s
+                break
+        
+        status_map_js = {'pending': 'pending', 'cooking': 'preparing', 'served': 'ready'}
+
+        orders_data.append({
+            'id': session_id,
+            'table_number': items[0].table.name,
+            'created_at': items[0].timestamp.isoformat(),
+            'status': status_map_js.get(group_status, 'pending'),
+            'items': [{'name': name, 'quantity': data['quantity'], 'notes': data['notes']} for name, data in aggregated_items.items()]
+        })
+
+    stats = {
+        "pending_orders": Order.query.filter_by(status='pending').count(),
+        "preparing_orders": Order.query.filter_by(status='cooking').count(),
+        "ready_orders": Order.query.filter_by(status='served').count(),
+        "total_orders": Order.query.filter(Order.timestamp >= datetime.datetime.now(JST).replace(hour=0, minute=0, second=0)).count()
+    }
+    return jsonify(success=True, orders=orders_data, stats=stats)
+
+@app.route('/api/kitchen/orders/<session_id>/status', methods=['PUT'])
+@login_required
+def update_order_status_api(session_id):
+    new_status_js = request.json.get('status')
+    status_map_db = {'preparing': 'cooking', 'ready': 'served', 'completed': 'served'}
+    new_status_db = status_map_db.get(new_status_js)
+    if not new_status_db: return jsonify(success=False, message="Invalid status"), 400
+
+    orders_in_session = Order.query.filter_by(session_id=session_id).all()
+    if not orders_in_session: return jsonify(success=False, message="Order not found"), 404
+        
+    for order in orders_in_session: order.status = new_status_db
     db.session.commit()
     return jsonify(success=True)
 
@@ -251,15 +338,12 @@ def api_dashboard_sales():
             daily_total = db.session.query(func.sum(Order.item_price)).filter(Order.timestamp.between(day_start, day_end)).scalar() or 0
             labels.append(day.strftime('%m/%d'))
             sales.append(daily_total)
-    else: # monthly
+    else:
         for i in range(5, -1, -1):
-            # 月の初日を計算
             target_month_start_naive = (today.replace(day=1) - datetime.timedelta(days=i*30)).replace(day=1)
             target_month_start = JST.localize(datetime.datetime.combine(target_month_start_naive, datetime.time.min))
-            # 翌月の初日を計算
             next_month_start_naive = (target_month_start_naive + datetime.timedelta(days=32)).replace(day=1)
             next_month_start = JST.localize(datetime.datetime.combine(next_month_start_naive, datetime.time.min))
-            
             monthly_total = db.session.query(func.sum(Order.item_price)).filter(Order.timestamp >= target_month_start, Order.timestamp < next_month_start).scalar() or 0
             labels.append(target_month_start.strftime('%Y/%m'))
             sales.append(monthly_total)
@@ -333,19 +417,20 @@ def delete_table(table_id):
 @app.cli.command("init-db")
 def init_db_command():
     """データベースをクリアし、初期データを投入します。"""
-    db.drop_all()
-    db.create_all()
-    admin_user = User(username='admin', is_admin=True)
-    admin_user.set_password('password123')
-    db.session.add(admin_user)
-    db.session.add_all([Table(name=f'{i}番テーブル') for i in range(1, 6)])
-    db.session.add_all([
-        MenuItem(name='シーザーサラダ', price=800, category='前菜'),
-        MenuItem(name='ステーキ', price=2500, category='メイン'),
-        MenuItem(name='カルボナーラ', price=1200, category='パスタ'),
-    ])
-    db.session.commit()
-    print("データベースが初期化されました。")
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+        admin_user = User(username='admin', is_admin=True)
+        admin_user.set_password('password123')
+        db.session.add(admin_user)
+        db.session.add_all([Table(name=f'{i}番テーブル') for i in range(1, 6)])
+        db.session.add_all([
+            MenuItem(name='シーザーサラダ', price=800, category='前菜'),
+            MenuItem(name='ステーキ', price=2500, category='メイン'),
+            MenuItem(name='カルボナーラ', price=1200, category='パスタ'),
+        ])
+        db.session.commit()
+        print("データベースが初期化されました。")
 
 if __name__ == '__main__':
     with app.app_context():
