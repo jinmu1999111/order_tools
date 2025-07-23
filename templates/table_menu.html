@@ -1,406 +1,51 @@
 {% extends "layout.html" %}
-
 {% block title %}メニュー注文 - テーブル{{ table.name }}{% endblock %}
-
-{% block extra_css %}
-<style>
-    .menu-header {
-        background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
-        color: white;
-        padding: 2rem 0;
-        margin-bottom: 2rem;
-    }
-    
-    .table-info {
-        background: rgba(255,255,255,0.2);
-        border-radius: 10px;
-        padding: 1rem;
-        text-align: center;
-        backdrop-filter: blur(10px);
-    }
-    
-    .category-nav {
-        background: white;
-        border-radius: 10px;
-        padding: 1rem;
-        margin-bottom: 2rem;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        position: sticky;
-        top: 80px;
-        z-index: 100;
-    }
-    
-    .category-btn {
-        background: #f8f9fa;
-        border: 1px solid #dee2e6;
-        color: #495057;
-        padding: 0.75rem 1.5rem;
-        margin: 0.25rem;
-        border-radius: 25px;
-        font-weight: 500;
-        transition: all 0.3s ease;
-        text-decoration: none;
-        display: inline-block;
-    }
-    
-    .category-btn:hover,
-    .category-btn.active {
-        background: #ff6b6b;
-        color: white;
-        text-decoration: none;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(255, 107, 107, 0.3);
-    }
-    
-    .menu-section {
-        margin-bottom: 3rem;
-    }
-    
-    .section-title {
-        font-size: 1.8rem;
-        font-weight: bold;
-        color: #333;
-        margin-bottom: 1.5rem;
-        padding-bottom: 0.5rem;
-        border-bottom: 3px solid #ff6b6b;
-        display: flex;
-        align-items: center;
-    }
-        
-    .menu-item {
-        background: white;
-        border-radius: 15px;
-        padding: 1.5rem;
-        margin-bottom: 1.5rem;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        transition: all 0.3s ease;
-        border: 1px solid #f0f0f0;
-    }
-    
-    .menu-item:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-    }
-    
-    .menu-item-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: 1rem;
-    }
-    
-    .item-name {
-        font-size: 1.3rem;
-        font-weight: bold;
-        color: #333;
-        margin-bottom: 0.5rem;
-    }
-    
-    .item-price {
-        font-size: 1.5rem;
-        font-weight: bold;
-        color: #ff6b6b;
-        white-space: nowrap;
-    }
-    
-    .quantity-controls {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        margin-top: 1rem;
-    }
-    
-    .quantity-input {
-        display: flex;
-        align-items: center;
-        background: #f8f9fa;
-        border-radius: 25px;
-        padding: 0.5rem;
-    }
-    
-    .qty-btn {
-        background: #ff6b6b;
-        color: white;
-        border: none;
-        width: 35px;
-        height: 35px;
-        border-radius: 50%;
-        font-weight: bold;
-        cursor: pointer;
-        transition: all 0.2s ease;
-    }
-    
-    .qty-btn:hover {
-        background: #ff5252;
-        transform: scale(1.1);
-    }
-        
-    .qty-display {
-        min-width: 60px;
-        text-align: center;
-        font-weight: bold;
-        font-size: 1.1rem;
-        margin: 0 1rem;
-    }
-    
-    .add-to-cart-btn {
-        background: linear-gradient(45deg, #ff6b6b, #ee5a24);
-        color: white;
-        border: none;
-        padding: 0.75rem 1.5rem;
-        border-radius: 25px;
-        font-weight: bold;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        min-width: 120px;
-    }
-    
-    .add-to-cart-btn:hover {
-        transform: scale(1.05);
-        box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
-    }
-    
-    .cart-sidebar {
-        position: fixed;
-        right: -400px;
-        top: 0;
-        width: 400px;
-        height: 100vh;
-        background: white;
-        box-shadow: -5px 0 15px rgba(0,0,0,0.1);
-        transition: right 0.3s ease;
-        z-index: 1000;
-        display: flex;
-        flex-direction: column;
-    }
-    
-    .cart-sidebar.active {
-        right: 0;
-    }
-    
-    .cart-header {
-        background: #ff6b6b;
-        color: white;
-        padding: 1.5rem;
-    }
-    
-    .cart-content {
-        padding: 1.5rem;
-        flex-grow: 1;
-        overflow-y: auto;
-    }
-    
-    .cart-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 1rem 0;
-        border-bottom: 1px solid #eee;
-    }
-    
-    .cart-item-info {
-        flex: 1;
-    }
-    
-    .cart-item-name {
-        font-weight: bold;
-        margin-bottom: 0.25rem;
-    }
-    
-    .cart-item-price {
-        color: #ff6b6b;
-        font-weight: bold;
-    }
-    
-    .cart-total {
-        background: #f8f9fa;
-        padding: 1.5rem;
-        border-radius: 10px;
-        border-top: 1px solid #ddd;
-    }
-    
-    .floating-cart-btn {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background: #ff6b6b;
-        color: white;
-        border: none;
-        width: 60px;
-        height: 60px;
-        border-radius: 50%;
-        font-size: 1.5rem;
-        cursor: pointer;
-        box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
-        transition: all 0.3s ease;
-        z-index: 999;
-    }
-    
-    .floating-cart-btn:hover {
-        transform: scale(1.1);
-        box-shadow: 0 6px 20px rgba(255, 107, 107, 0.6);
-    }
-    
-    .cart-badge {
-        position: absolute;
-        top: -5px;
-        right: -5px;
-        background: #ee5a24;
-        color: white;
-        border-radius: 50%;
-        width: 25px;
-        height: 25px;
-        font-size: 0.8rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: bold;
-    }
-    
-    .overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0,0,0,0.5);
-        z-index: 999;
-        opacity: 0;
-        visibility: hidden;
-        transition: all 0.3s ease;
-    }
-    
-    .overlay.active {
-        opacity: 1;
-        visibility: visible;
-    }
-    
-    .order-btn {
-        background: linear-gradient(45deg, #2ed573, #1e90ff);
-        color: white;
-        border: none;
-        padding: 1rem;
-        width: 100%;
-        border-radius: 10px;
-        font-size: 1.2rem;
-        font-weight: bold;
-        margin-top: 1rem;
-        cursor: pointer;
-        transition: all 0.3s ease;
-    }
-    
-    .order-btn:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(46, 213, 115, 0.4);
-    }
-    
-    .order-btn:disabled {
-        background: #ccc;
-        cursor: not-allowed;
-        transform: none;
-    }
-    
-    @media (max-width: 768px) {
-        .cart-sidebar {
-            width: 100%;
-            right: -100%;
-        }
-        
-        .menu-item {
-            padding: 1rem;
-        }
-        
-        .item-name {
-            font-size: 1.1rem;
-        }
-        
-        .category-nav {
-            top: 60px;
-            padding: 0.5rem;
-        }
-        
-        .category-btn {
-            padding: 0.5rem 1rem;
-            font-size: 0.9rem;
-        }
-    }
-        
-    .success-message {
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: #2ed573;
-        color: white;
-        padding: 2rem;
-        border-radius: 15px;
-        text-align: center;
-        z-index: 2000;
-        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-    }
-</style>
-{% endblock %}
-
 {% block content %}
+<style>
+    .menu-header { background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%); color: white; padding: 2rem 0; margin-bottom: 2rem; text-align: center; }
+    .category-nav { position: sticky; top: 60px; z-index: 100; background: white; padding: 1rem; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 2rem; border-radius: 10px; }
+    .menu-item { background: white; border-radius: 15px; padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+    .quantity-controls { display: flex; align-items: center; justify-content: space-between; margin-top: 1rem; }
+    .qty-btn { background: #ff6b6b; color: white; border: none; width: 35px; height: 35px; border-radius: 50%; font-weight: bold; }
+    .qty-display { min-width: 50px; text-align: center; font-weight: bold; font-size: 1.1rem; }
+    .add-to-cart-btn { background: linear-gradient(45deg, #ff6b6b, #ee5a24); color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 25px; font-weight: bold; }
+    .floating-cart-btn { position: fixed; bottom: 20px; right: 20px; background: #ff6b6b; color: white; width: 60px; height: 60px; border-radius: 50%; font-size: 1.5rem; box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4); z-index: 999; border: none; }
+    .cart-sidebar { position: fixed; right: -100%; top: 0; width: 100%; max-width: 400px; height: 100vh; background: white; box-shadow: -5px 0 15px rgba(0,0,0,0.1); transition: right 0.3s ease; z-index: 1000; display: flex; flex-direction: column; }
+    .cart-sidebar.active { right: 0; }
+    .cart-content { flex-grow: 1; overflow-y: auto; padding: 1rem; }
+    .cart-total { padding: 1rem; border-top: 1px solid #ddd; }
+    .order-btn { background: #2ed573; color: white; border: none; padding: 1rem; width: 100%; border-radius: 10px; font-size: 1.2rem; font-weight: bold; }
+</style>
+
 <div class="menu-header">
-    <div class="container">
-        <div class="row align-items-center">
-            <div class="col-md-8">
-                <h1>
-                    <i class="fas fa-utensils me-3"></i>
-                    メニュー
-                </h1>
-                <p class="mb-0">お好きな料理をお選びください</p>
-            </div>
-            <div class="col-md-4">
-                <div class="table-info">
-                    <h3 class="mb-1">
-                        <i class="fas fa-chair me-2"></i>
-                        テーブル {{ table.name }}
-                    </h3>
-                </div>
-            </div>
-        </div>
-    </div>
+    <h1><i class="fas fa-utensils me-2"></i>メニュー</h1>
+    <p>テーブル: {{ table.name }}</p>
 </div>
 
 <div class="container">
-    <div class="category-nav">
-        <div class="text-center">
-            {% for category, items in categorized_menu.items() %}
-            <a href="#category-{{ category | replace(' ', '-') }}" class="category-btn" data-category="{{ category }}">
-                {{ category }}
-            </a>
-            {% endfor %}
-        </div>
+    <div class="category-nav text-center">
+        {% for category in categorized_menu.keys() %}
+        <a href="#category-{{ category }}" class="btn btn-light m-1">{{ category }}</a>
+        {% endfor %}
     </div>
-    
+
     {% for category, items in categorized_menu.items() %}
-    <div id="category-{{ category | replace(' ', '-') }}" class="menu-section">
-        <h2 class="section-title">
-            {{ category }}
-        </h2>
-        
+    <div id="category-{{ category }}" class="menu-section mb-5">
+        <h2>{{ category }}</h2>
+        <hr>
         <div class="row">
             {% for item in items %}
-            <div class="col-lg-6 col-xl-4">
+            <div class="col-md-6 col-lg-4">
                 <div class="menu-item" data-item-id="{{ item.id }}" data-item-name="{{ item.name }}" data-item-price="{{ item.price }}">
-                    <div class="menu-item-header">
-                        <div class="flex-grow-1">
-                            <div class="item-name">{{ item.name }}</div>
-                            <div class="item-price">¥{{ "{:,}".format(item.price) }}</div>
-                        </div>
-                    </div>
-                    
+                    <h4>{{ item.name }}</h4>
+                    <p class="fs-5 text-danger fw-bold">¥{{ "{:,}".format(item.price) }}</p>
                     <div class="quantity-controls">
-                        <div class="quantity-input">
-                            <button class="qty-btn" type="button" onclick="changeQuantity('{{ item.id }}', -1)">-</button>
-                            <span class="qty-display" id="qty-{{ item.id }}">0</span>
-                            <button class="qty-btn" type="button" onclick="changeQuantity('{{ item.id }}', 1)">+</button>
+                        <div class="input-group">
+                            <button class="btn btn-outline-secondary qty-btn" type="button" onclick="changeQuantity('{{ item.id }}', -1)">-</button>
+                            <span class="qty-display form-control text-center" id="qty-{{ item.id }}">0</span>
+                            <button class="btn btn-outline-secondary qty-btn" type="button" onclick="changeQuantity('{{ item.id }}', 1)">+</button>
                         </div>
-                        <button class="add-to-cart-btn" onclick="addToCart('{{ item.id }}')">
-                            <i class="fas fa-cart-plus me-2"></i>カートに追加
-                        </button>
+                        <button class="add-to-cart-btn ms-3" onclick="addToCart('{{ item.id }}')">追加</button>
                     </div>
                 </div>
             </div>
@@ -412,190 +57,82 @@
 
 <button class="floating-cart-btn" onclick="toggleCart()">
     <i class="fas fa-shopping-cart"></i>
-    <span class="cart-badge" id="cart-count" style="display: none;">0</span>
+    <span class="badge bg-danger rounded-pill position-absolute top-0 start-100 translate-middle" id="cart-count" style="display: none;"></span>
 </button>
 
-<div class="overlay" id="cart-overlay" onclick="toggleCart()"></div>
 <div class="cart-sidebar" id="cart-sidebar">
-    <div class="cart-header">
-        <div class="d-flex justify-content-between align-items-center">
-            <h4 class="mb-0">
-                <i class="fas fa-shopping-cart me-2"></i>
-                注文内容
-            </h4>
-            <button class="btn btn-sm btn-light" onclick="toggleCart()">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
+    <div class="d-flex justify-content-between align-items-center p-3 border-bottom">
+        <h4 class="mb-0">注文内容</h4>
+        <button class="btn-close" onclick="toggleCart()"></button>
     </div>
-    
-    <div class="cart-content" id="cart-items">
-        <div class="text-center text-muted py-4">
-            <i class="fas fa-shopping-cart fa-3x mb-3"></i>
-            <p>カートが空です</p>
-        </div>
-    </div>
-    
-    <div class="cart-total" id="cart-total" style="display: none;">
-        <div class="d-flex justify-content-between mb-2">
-            <span>合計:</span>
-            <span id="total">¥0</span>
-        </div>
-        
-        <button class="order-btn" onclick="submitOrder()" id="submit-order-btn" disabled>
-            <i class="fas fa-paper-plane me-2"></i>
-            注文を確定する
-        </button>
+    <div class="cart-content" id="cart-items"><p class="text-center text-muted">カートは空です。</p></div>
+    <div class="cart-total">
+        <h4>合計: <span id="total">¥0</span></h4>
+        <button class="order-btn" onclick="submitOrder()" id="submit-order-btn" disabled>注文を確定する</button>
     </div>
 </div>
 
 <script>
-// カートデータ
-let cart = {};
-const tableId = {{ table.id }};
+    let cart = {};
+    const tableId = {{ table.id }};
 
-// 数量変更
-function changeQuantity(itemId, change) {
-    const qtyElement = document.getElementById(`qty-${itemId}`);
-    let currentQty = parseInt(qtyElement.textContent);
-    let newQty = Math.max(0, currentQty + change);
-    qtyElement.textContent = newQty;
-}
-
-// カートに追加
-function addToCart(itemId) {
-    const qtyElement = document.getElementById(`qty-${itemId}`);
-    const quantity = parseInt(qtyElement.textContent);
-    
-    if (quantity <= 0) {
-        showError("数量を1以上にしてください。");
-        return;
+    function changeQuantity(itemId, change) {
+        const qtyEl = document.getElementById(`qty-${itemId}`);
+        let qty = parseInt(qtyEl.textContent) + change;
+        if (qty < 0) qty = 0;
+        qtyEl.textContent = qty;
     }
-    
-    const menuItemEl = document.querySelector(`[data-item-id="${itemId}"]`);
-    const name = menuItemEl.dataset.itemName;
-    const price = parseInt(menuItemEl.dataset.itemPrice);
 
-    if (cart[itemId]) {
-        cart[itemId].quantity += quantity;
-    } else {
-        cart[itemId] = { name, price, quantity };
+    function addToCart(itemId) {
+        const qty = parseInt(document.getElementById(`qty-${itemId}`).textContent);
+        if (qty === 0) return;
+        const itemEl = document.querySelector(`[data-item-id="${itemId}"]`);
+        const name = itemEl.dataset.itemName;
+        const price = parseInt(itemEl.dataset.itemPrice);
+        cart[itemId] = { name, price, quantity: (cart[itemId]?.quantity || 0) + qty };
+        document.getElementById(`qty-${itemId}`).textContent = 0;
+        updateCartDisplay();
     }
-    
-    qtyElement.textContent = '0'; // リセット
-    updateCartDisplay();
-    showSuccess(`${name} をカートに追加しました`);
-}
 
-// カート表示更新
-function updateCartDisplay() {
-    const cartItemsEl = document.getElementById('cart-items');
-    const cartTotalEl = document.getElementById('cart-total');
-    const cartCountEl = document.getElementById('cart-count');
-    const submitBtn = document.getElementById('submit-order-btn');
-    
-    let totalItems = 0;
-    let totalPrice = 0;
-    let html = '';
-    
-    const cartEntries = Object.entries(cart);
-
-    if (cartEntries.length === 0) {
-        html = `<div class="text-center text-muted py-4"><i class="fas fa-shopping-cart fa-3x mb-3"></i><p>カートが空です</p></div>`;
-        cartTotalEl.style.display = 'none';
-        submitBtn.disabled = true;
-    } else {
-        for (const [itemId, item] of cartEntries) {
+    function updateCartDisplay() {
+        const cartItemsEl = document.getElementById('cart-items');
+        const cartCountEl = document.getElementById('cart-count');
+        let totalItems = 0, totalPrice = 0, html = '';
+        Object.values(cart).forEach(item => {
             totalItems += item.quantity;
             totalPrice += item.price * item.quantity;
-            
-            html += `
-                <div class="cart-item">
-                    <div class="cart-item-info">
-                        <div class="cart-item-name">${item.name}</div>
-                        <div class="cart-item-price">¥${item.price.toLocaleString()} × ${item.quantity}</div>
-                    </div>
-                    <div class="cart-item-controls">
-                        <button class="btn btn-sm btn-outline-danger" onclick="removeCartItem('${itemId}')">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
-                </div>
-            `;
-        }
-        
-        cartTotalEl.style.display = 'block';
-        submitBtn.disabled = false;
+            html += `<div class="p-2 border-bottom">${item.name} x ${item.quantity} - ¥${(item.price * item.quantity).toLocaleString()}</div>`;
+        });
+        cartItemsEl.innerHTML = html || '<p class="text-center text-muted">カートは空です。</p>';
         document.getElementById('total').textContent = `¥${totalPrice.toLocaleString()}`;
+        cartCountEl.textContent = totalItems;
+        cartCountEl.style.display = totalItems > 0 ? 'inline-block' : 'none';
+        document.getElementById('submit-order-btn').disabled = totalItems === 0;
     }
-    
-    cartItemsEl.innerHTML = html;
-    cartCountEl.textContent = totalItems;
-    cartCountEl.style.display = totalItems > 0 ? 'flex' : 'none';
-}
 
-function removeCartItem(itemId) {
-    delete cart[itemId];
-    updateCartDisplay();
-}
+    function toggleCart() { document.getElementById('cart-sidebar').classList.toggle('active'); }
 
-// カート表示切り替え
-function toggleCart() {
-    document.getElementById('cart-sidebar').classList.toggle('active');
-    document.getElementById('cart-overlay').classList.toggle('active');
-}
-
-// 注文送信
-async function submitOrder() {
-    if (Object.keys(cart).length === 0) {
-        showError('カートが空です');
-        return;
-    }
-    
-    const submitBtn = document.getElementById('submit-order-btn');
-    submitBtn.disabled = true;
-    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>注文中...';
-    
-    try {
+    async function submitOrder() {
+        const btn = document.getElementById('submit-order-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 処理中...';
+        
         const response = await fetch('/api/order/submit', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                table_id: tableId,
-                items: cart
-            })
+            body: JSON.stringify({ table_id: tableId, items: cart })
         });
-
-        const data = await response.json();
-
-        if (response.ok && data.success) {
+        
+        if (response.ok) {
+            alert('注文が完了しました！');
             cart = {};
             updateCartDisplay();
             toggleCart();
-            showSuccess('注文を受け付けました！');
         } else {
-            showError(data.message || '注文の送信に失敗しました');
+            alert('注文に失敗しました。');
         }
-    } catch (error) {
-        console.error('Error:', error);
-        showError('注文の送信中にネットワークエラーが発生しました');
-    } finally {
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = '<i class="fas fa-paper-plane me-2"></i>注文を確定する';
+        btn.disabled = false;
+        btn.textContent = '注文を確定する';
     }
-}
-
-// メッセージ表示
-function showSuccess(message) {
-    const el = document.createElement('div');
-    el.className = 'success-message';
-    el.innerHTML = `<i class="fas fa-check-circle fa-3x mb-3"></i><h4>${message}</h4>`;
-    document.body.appendChild(el);
-    setTimeout(() => el.remove(), 3000);
-}
-
-function showError(message) {
-    alert(`エラー: ${message}`); // 本番ではより良いUIを検討
-}
 </script>
 {% endblock %}

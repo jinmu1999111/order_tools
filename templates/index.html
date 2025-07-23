@@ -1,30 +1,13 @@
 {% extends "layout.html" %}
-
 {% block title %}ホーム - 注文管理システム{% endblock %}
-
-{% block extra_css %}
+{% block content %}
 <style>
     .hero-section {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
-        padding: 4rem 0;
+        padding: 5rem 0;
         text-align: center;
-        margin-bottom: 3rem;
     }
-    
-    .hero-title {
-        font-size: 3rem;
-        font-weight: bold;
-        margin-bottom: 1rem;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-    }
-    
-    .hero-subtitle {
-        font-size: 1.3rem;
-        opacity: 0.9;
-        margin-bottom: 2rem;
-    }
-    
     .feature-card {
         background: white;
         border-radius: 15px;
@@ -33,208 +16,35 @@
         box-shadow: 0 5px 15px rgba(0,0,0,0.1);
         transition: all 0.3s ease;
         height: 100%;
-        border: none;
     }
-    
     .feature-card:hover {
         transform: translateY(-5px);
-        box-shadow: 0 10px 25px rgba(0,0,0,0.15);
-    }
-    
-    .feature-icon {
-        font-size: 3rem;
-        margin-bottom: 1rem;
-        color: #667eea;
-    }
-    
-    .feature-title {
-        font-size: 1.5rem;
-        font-weight: bold;
-        margin-bottom: 1rem;
-        color: #333;
-    }
-    
-    .feature-description {
-        color: #666;
-        line-height: 1.6;
-        margin-bottom: 1.5rem;
-    }
-    
-    .btn-feature {
-        background: linear-gradient(45deg, #667eea, #764ba2);
-        border: none;
-        color: white;
-        padding: 0.75rem 2rem;
-        border-radius: 25px;
-        font-weight: 500;
-        text-decoration: none;
-        display: inline-block;
-        transition: all 0.3s ease;
-    }
-    
-    .btn-feature:hover {
-        color: white;
-        text-decoration: none;
-        transform: scale(1.05);
-        box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-    }
-    
-    .stats-section {
-        background: #f8f9fa;
-        padding: 3rem 0;
-        margin: 3rem 0;
-    }
-    
-    .stat-card {
-        text-align: center;
-        padding: 1.5rem;
-    }
-    
-    .stat-number {
-        font-size: 2.5rem;
-        font-weight: bold;
-        color: #667eea;
-        display: block;
-    }
-    
-    .stat-label {
-        color: #666;
-        font-size: 1rem;
-        margin-top: 0.5rem;
-    }
-    
-    .news-section {
-        padding: 2rem 0;
-    }
-    
-    .news-item {
-        background: white;
-        border-radius: 8px;
-        padding: 1.5rem;
-        margin-bottom: 1rem;
-        border-left: 4px solid #667eea;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    }
-    
-    .news-date {
-        color: #666;
-        font-size: 0.9rem;
-        margin-bottom: 0.5rem;
-    }
-    
-    .news-title {
-        font-weight: bold;
-        color: #333;
-        margin-bottom: 0.5rem;
-    }
-    
-    .news-content {
-        color: #666;
-        line-height: 1.5;
-    }
-    
-    .quick-actions {
-        background: white;
-        border-radius: 15px;
-        padding: 2rem;
-        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-        margin-bottom: 2rem;
-    }
-    
-    .action-btn {
-        display: flex;
-        align-items: center;
-        padding: 1rem;
-        margin: 0.5rem 0;
-        background: #f8f9fa;
-        border: 1px solid #e9ecef;
-        border-radius: 8px;
-        text-decoration: none;
-        color: #333;
-        transition: all 0.3s ease;
-    }
-    
-    .action-btn:hover {
-        background: #667eea;
-        color: white;
-        text-decoration: none;
-        transform: translateX(5px);
-    }
-    
-    .action-icon {
-        font-size: 1.5rem;
-        margin-right: 1rem;
-        width: 40px;
-        text-align: center;
-    }
-    
-    @media (max-width: 768px) {
-        .hero-title {
-            font-size: 2rem;
-        }
-        
-        .hero-subtitle {
-            font-size: 1.1rem;
-        }
-        
-        .feature-card {
-            margin-bottom: 2rem;
-        }
-        
-        .stat-number {
-            font-size: 2rem;
-        }
     }
 </style>
-{% endblock %}
-
-{% block content %}
 <div class="hero-section">
     <div class="container">
-        <h1 class="hero-title">
-            <i class="fas fa-utensils me-3"></i>
-            注文管理システム
-        </h1>
-        <p class="hero-subtitle">
-            効率的な注文管理とスムーズなオペレーションを実現
-        </p>
-        <p class="text-white-50">QRコードをスキャンして注文を開始するか、管理者としてログインしてください。</p>
+        <h1 class="display-4">注文管理システム</h1>
+        <p class="lead">効率的な注文管理とスムーズなオペレーションを実現します。</p>
+        <p>QRコードをスキャンして注文を開始するか、管理者としてログインしてください。</p>
     </div>
 </div>
 
-<div class="container">
-    <div class="row mb-5 justify-content-center">
+<div class="container mt-5">
+    <div class="row justify-content-center">
         <div class="col-lg-4 col-md-6 mb-4">
             <div class="feature-card">
-                <div class="feature-icon">
-                    <i class="fas fa-fire"></i>
-                </div>
-                <h3 class="feature-title">キッチン管理</h3>
-                <p class="feature-description">
-                    リアルタイムで注文状況を確認し、効率的な調理管理を実現します。
-                </p>
-                <a href="{{ url_for('kitchen') }}" class="btn-feature">
-                    キッチン画面へ
-                </a>
+                <h3><i class="fas fa-fire"></i> キッチン管理</h3>
+                <p>リアルタイムで注文状況を確認し、調理管理を行います。</p>
+                <a href="{{ url_for('kitchen') }}" class="btn btn-primary">キッチン画面へ</a>
             </div>
         </div>
-        
         <div class="col-lg-4 col-md-6 mb-4">
             <div class="feature-card">
-                <div class="feature-icon">
-                    <i class="fas fa-chart-line"></i>
-                </div>
-                <h3 class="feature-title">売上分析</h3>
-                <p class="feature-description">
-                    詳細な売上データと分析レポートで、経営判断をサポートします。
-                </p>
-                <a href="{{ url_for('dashboard') }}" class="btn-feature">
-                    ダッシュボードへ
-                </a>
+                <h3><i class="fas fa-chart-line"></i> 売上分析</h3>
+                <p>詳細な売上データと分析レポートで経営判断をサポートします。</p>
+                <a href="{{ url_for('dashboard') }}" class="btn btn-primary">ダッシュボードへ</a>
             </div>
         </div>
     </div>
-    
 </div>
-
 {% endblock %}
