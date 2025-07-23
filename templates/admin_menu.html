@@ -2,548 +2,88 @@
 
 {% block title %}メニュー管理{% endblock %}
 
-{% block content %}
-<div class="container mx-auto p-4">
-    <h1 class="text-3xl font-bold text-gray-800 mb-6">🍔 メニュー管理</h1>
-
-    <!-- メニュー追加フォーム -->
-    <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-        <h2 class="text-xl font-semibold text-gray-700 mb-4">新しいメニューを追加</h2>
-        <form id="add-menu-form" action="{{ url_for('add_menu_item') }}" method="POST" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-            <div class="md:col-span-1">
-                <label for="name" class="block text-sm font-medium text-gray-700 mb-1">メニュー名</label>
-                <input type="text" id="name" name="name" required class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-            </div>
-            <div class="md:col-span-1">
-                <label for="price" class="block text-sm font-medium text-gray-700 mb-1">価格 (¥)</label>
-                <input type="number" id="price" name="price" required min="0" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-            </div>
-            <div class="md:col-span-1">
-                <label for="category" class="block text-sm font-medium text-gray-700 mb-1">カテゴリ</label>
-                <input type="text" id="category" name="category" required class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-            </div>
-            <div class="md:col-span-1">
-                <button type="submit" class="w-full bg-primary text-white px-4 py-2 rounded-md hover:bg-primary-dark transition duration-300 flex items-center justify-center">
-                    <i class="fas fa-plus mr-2"></i> 追加
-                </button>
-            </div>
-        </form>
-    </div>
-
-    <!-- メニュー一覧と管理機能 -->
-    <div class="bg-white rounded-lg shadow-md p-6">
-        <h2 class="text-xl font-semibold text-gray-700 mb-4">メニュー一覧</h2>
-
-        <!-- フィルター・検索機能 -->
-        <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
-            <div class="w-full md:w-1/3 relative">
-                <input type="text" id="menu-search" placeholder="メニュー名で検索..." class="w-full p-2 pl-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-            </div>
-            <div class="w-full md:w-1/3">
-                <select id="category-filter" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-                    <option value="">全てのカテゴリ</option>
-                    {% set categories = menu_items | map(attribute='category') | unique | list %}
-                    {% for category in categories %}
-                    <option value="{{ category }}">{{ category }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="w-full md:w-1/3 text-right">
-                <button id="export-csv" class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition duration-300 mr-2">
-                    <i class="fas fa-file-csv mr-2"></i> CSVエクスポート
-                </button>
-                <button id="import-csv" class="bg-green-500 text-white px-4 py-2 rounded-md hover:bg-green-600 transition duration-300">
-                    <i class="fas fa-file-import mr-2"></i> CSVインポート
-                </button>
-                <input type="file" id="csv-file-input" accept=".csv" class="hidden">
-            </div>
-        </div>
-
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            メニュー名
-                        </th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            価格
-                        </th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            カテゴリ
-                        </th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            表示状態
-                        </th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            操作
-                        </th>
-                    </tr>
-                </thead>
-                <tbody id="menu-table-body" class="bg-white divide-y divide-gray-200">
-                    {% for item in menu_items %}
-                    <tr data-id="{{ item.id }}" data-name="{{ item.name }}" data-price="{{ item.price }}" data-category="{{ item.category }}" data-active="{{ item.active }}">
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 editable" data-field="name">{{ item.name }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 editable" data-field="price">¥{{ item.price | int }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 editable" data-field="category">{{ item.category }}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm">
-                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {% if item.active %}bg-green-100 text-green-800{% else %}bg-red-100 text-red-800{% endif %}">
-                                {% if item.active %}表示中{% else %}非表示{% endif %}
-                            </span>
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <button onclick="toggleMenuItem({{ item.id }})" class="text-blue-600 hover:text-blue-900 mr-3 transition duration-150">
-                                <i class="fas fa-eye{% if not item.active %}-slash{% endif %}"></i> 表示切替
-                            </button>
-                            <button onclick="openEditModal({{ item.id }}, '{{ item.name }}', {{ item.price }}, '{{ item.category }}')" class="text-indigo-600 hover:text-indigo-900 mr-3 transition duration-150">
-                                <i class="fas fa-edit"></i> 編集
-                            </button>
-                            <button onclick="confirmDelete({{ item.id }}, '{{ item.name }}')" class="text-red-600 hover:text-red-900 transition duration-150">
-                                <i class="fas fa-trash-alt"></i> 削除
-                            </button>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-</div>
-
-<!-- 編集モーダル -->
-<div id="edit-menu-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden z-50">
-    <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md animate-scale-in">
-        <h2 class="text-2xl font-bold text-gray-800 mb-4">メニューを編集</h2>
-        <form id="edit-form">
-            <input type="hidden" id="edit-item-id">
-            <div class="mb-4">
-                <label for="edit-name" class="block text-sm font-medium text-gray-700 mb-1">メニュー名</label>
-                <input type="text" id="edit-name" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-            </div>
-            <div class="mb-4">
-                <label for="edit-price" class="block text-sm font-medium text-gray-700 mb-1">価格 (¥)</label>
-                <input type="number" id="edit-price" min="0" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-            </div>
-            <div class="mb-6">
-                <label for="edit-category" class="block text-sm font-medium text-gray-700 mb-1">カテゴリ</label>
-                <input type="text" id="edit-category" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-            </div>
-            <div class="flex justify-end gap-3">
-                <button type="button" onclick="closeEditModal()" class="bg-gray-300 text-gray-800 px-5 py-2 rounded-md hover:bg-gray-400 transition duration-300">キャンセル</button>
-                <button type="submit" class="bg-primary text-white px-5 py-2 rounded-md hover:bg-primary-dark transition duration-300">保存</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<!-- 確認ダイアログ -->
-<div id="confirm-dialog" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden z-50">
-    <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm animate-scale-in">
-        <h2 class="text-xl font-bold text-gray-800 mb-4">確認</h2>
-        <p id="confirm-message" class="text-gray-700 mb-6">本当に削除しますか？</p>
-        <div class="flex justify-end gap-3">
-            <button type="button" onclick="closeConfirmDialog()" class="bg-gray-300 text-gray-800 px-5 py-2 rounded-md hover:bg-gray-400 transition duration-300">キャンセル</button>
-            <button type="button" id="confirm-action-button" class="bg-red-600 text-white px-5 py-2 rounded-md hover:bg-red-700 transition duration-300">削除</button>
-        </div>
-    </div>
-</div>
-
-<script>
-    // カラーパレットの定義
-    const colors = {
-        primary: '#667eea',
-        secondary: '#ff6b6b',
-        success: '#2ed573',
-        warning: '#ffa502',
-        error: '#ff4757',
-        gray: '#e2e8f0'
-    };
-
-    document.addEventListener('DOMContentLoaded', function() {
-        // フィルターと検索機能
-        const menuSearch = document.getElementById('menu-search');
-        const categoryFilter = document.getElementById('category-filter');
-        const menuTableBody = document.getElementById('menu-table-body');
-
-        function filterMenuItems() {
-            const searchText = menuSearch.value.toLowerCase();
-            const selectedCategory = categoryFilter.value.toLowerCase();
-
-            Array.from(menuTableBody.children).forEach(row => {
-                const name = row.dataset.name.toLowerCase();
-                const category = row.dataset.category.toLowerCase();
-
-                const matchesSearch = name.includes(searchText);
-                const matchesCategory = selectedCategory === '' || category === selectedCategory;
-
-                if (matchesSearch && matchesCategory) {
-                    row.style.display = '';
-                } else {
-                    row.style.display = 'none';
-                }
-            });
-        }
-
-        menuSearch.addEventListener('input', filterMenuItems);
-        categoryFilter.addEventListener('change', filterMenuItems);
-
-        // インライン編集機能
-        menuTableBody.addEventListener('dblclick', function(event) {
-            const target = event.target;
-            if (target.classList.contains('editable')) {
-                const originalText = target.textContent;
-                const field = target.dataset.field;
-                const itemId = target.closest('tr').dataset.id;
-
-                const input = document.createElement('input');
-                input.type = (field === 'price') ? 'number' : 'text';
-                input.value = (field === 'price') ? parseInt(originalText.replace('¥', '')) : originalText;
-                input.className = 'w-full p-1 border border-blue-300 rounded-md focus:outline-none';
-
-                target.innerHTML = '';
-                target.appendChild(input);
-                input.focus();
-
-                input.addEventListener('blur', async function() {
-                    const newValue = input.value;
-                    if (newValue !== originalText) {
-                        try {
-                            const response = await fetch('/api/menu/update', {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json'
-                                },
-                                body: JSON.stringify({
-                                    id: itemId,
-                                    field: field,
-                                    value: newValue
-                                })
-                            });
-                            const data = await response.json();
-                            if (data.success) {
-                                target.textContent = (field === 'price') ? `¥${parseInt(newValue).toLocaleString()}` : newValue;
-                                showToast('メニュー項目を更新しました。', 'success');
-                                // データ属性も更新
-                                target.closest('tr').dataset[field] = (field === 'price') ? parseInt(newValue) : newValue;
-                            } else {
-                                target.textContent = originalText; // 失敗したら元に戻す
-                                showToast('更新に失敗しました: ' + (data.message || '不明なエラー'), 'error');
-                            }
-                        } catch (error) {
-                            console.error('Error updating menu item:', error);
-                            target.textContent = originalText;
-                            showToast('メニュー項目の更新中にエラーが発生しました。', 'error');
-                        }
-                    } else {
-                        target.textContent = originalText;
-                    }
-                });
-            }
-        });
-
-        // CSVエクスポート機能
-        document.getElementById('export-csv').addEventListener('click', function() {
-            const rows = Array.from(menuTableBody.children);
-            let csvContent = "メニュー名,価格,カテゴリ,表示状態\n";
-
-            rows.forEach(row => {
-                const name = row.dataset.name;
-                const price = row.dataset.price;
-                const category = row.dataset.category;
-                const active = row.dataset.active === 'true' ? '表示中' : '非表示';
-                csvContent += `${name},${price},${category},${active}\n`;
-            });
-
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.setAttribute('download', 'menu_items.csv');
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            showToast('メニューデータをCSVでエクスポートしました。', 'info');
-        });
-
-        // CSVインポート機能 (ファイル選択をトリガー)
-        document.getElementById('import-csv').addEventListener('click', function() {
-            document.getElementById('csv-file-input').click();
-        });
-
-        // CSVインポート処理
-        document.getElementById('csv-file-input').addEventListener('change', async function(event) {
-            const file = event.target.files[0];
-            if (!file) {
-                return;
-            }
-
-            const reader = new FileReader();
-            reader.onload = async function(e) {
-                const text = e.target.result;
-                const lines = text.split('\n').filter(line => line.trim() !== '');
-                if (lines.length === 0) {
-                    showToast('CSVファイルが空です。', 'warning');
-                    return;
-                }
-
-                const headers = lines[0].split(',').map(h => h.trim());
-                if (!headers.includes('メニュー名') || !headers.includes('価格') || !headers.includes('カテゴリ')) {
-                    showToast('CSVヘッダーが無効です。「メニュー名,価格,カテゴリ」が含まれている必要があります。', 'error');
-                    return;
-                }
-
-                const itemsToImport = [];
-                for (let i = 1; i < lines.length; i++) {
-                    const values = lines[i].split(',');
-                    if (values.length !== headers.length) {
-                        console.warn(`Skipping malformed row: ${lines[i]}`);
-                        continue;
-                    }
-                    const item = {};
-                    headers.forEach((header, index) => {
-                        item[header] = values[index].trim();
-                    });
-
-                    // バリデーション
-                    if (!item['メニュー名'] || !item['価格'] || !item['カテゴリ'] || isNaN(parseInt(item['価格']))) {
-                        showToast(`CSVファイルの行 ${i + 1} に無効なデータがあります。`, 'warning');
-                        continue;
-                    }
-
-                    itemsToImport.push({
-                        name: item['メニュー名'],
-                        price: parseInt(item['価格']),
-                        category: item['カテゴリ']
-                    });
-                }
-
-                if (itemsToImport.length > 0) {
-                    try {
-                        const response = await fetch('/api/menu/import', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify({ items: itemsToImport })
-                        });
-                        const data = await response.json();
-                        if (data.success) {
-                            showToast(`${data.count} 件のメニューをインポートしました。`, 'success');
-                            setTimeout(() => location.reload(), 1500); // ページをリロードして最新データを表示
-                        } else {
-                            showToast('CSVインポートに失敗しました: ' + (data.message || '不明なエラー'), 'error');
-                        }
-                    } catch (error) {
-                        console.error('Error importing CSV:', error);
-                        showToast('CSVインポート中にエラーが発生しました。', 'error');
-                    }
-                } else {
-                    showToast('インポートする有効なメニューデータが見つかりませんでした。', 'warning');
-                }
-            };
-            reader.readAsText(file);
-        });
-
-        // フォームのバリデーション
-        document.getElementById('add-menu-form').addEventListener('submit', function(event) {
-            const name = document.getElementById('name').value.trim();
-            const price = document.getElementById('price').value.trim();
-            const category = document.getElementById('category').value.trim();
-
-            if (!name || !price || !category) {
-                showToast('全ての項目を入力してください。', 'warning');
-                event.preventDefault(); // フォーム送信をキャンセル
-            } else if (isNaN(parseInt(price)) || parseInt(price) < 0) {
-                showToast('価格は0以上の数値で入力してください。', 'warning');
-                event.preventDefault();
-            }
-        });
-
-        document.getElementById('edit-form').addEventListener('submit', async function(event) {
-            event.preventDefault();
-            const itemId = document.getElementById('edit-item-id').value;
-            const name = document.getElementById('edit-name').value.trim();
-            const price = document.getElementById('edit-price').value.trim();
-            const category = document.getElementById('edit-category').value.trim();
-
-            if (!name || !price || !category) {
-                showToast('全ての項目を入力してください。', 'warning');
-                return;
-            }
-            if (isNaN(parseInt(price)) || parseInt(price) < 0) {
-                showToast('価格は0以上の数値で入力してください。', 'warning');
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/menu/update_full', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        id: itemId,
-                        name: name,
-                        price: parseInt(price),
-                        category: category
-                    })
-                });
-                const data = await response.json();
-                if (data.success) {
-                    showToast('メニュー情報を更新しました。', 'success');
-                    closeEditModal();
-                    setTimeout(() => location.reload(), 500); // ページをリロードして最新データを表示
-                } else {
-                    showToast('更新に失敗しました: ' + (data.message || '不明なエラー'), 'error');
-                }
-            } catch (error) {
-                console.error('Error updating menu item:', error);
-                showToast('メニュー情報の更新中にエラーが発生しました。', 'error');
-            }
-        });
-    });
-
-    /**
-     * メニュー表示状態の切り替え
-     * @param {number} itemId - メニューID
-     */
-    async function toggleMenuItem(itemId) {
-        try {
-            const response = await fetch(`/admin/menu/toggle/${itemId}`);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const data = await response.json(); // FlaskからのレスポンスがJSONの場合
-            if (data.success) {
-                showToast('表示状態を切り替えました。', 'info');
-                setTimeout(() => location.reload(), 500); // ページをリロードして最新データを表示
-            } else {
-                showToast('表示状態の切り替えに失敗しました。', 'error');
-            }
-        } catch (error) {
-            console.error('Error toggling menu item:', error);
-            showToast('表示状態の切り替え中にエラーが発生しました。', 'error');
-        }
-    }
-
-    /**
-     * 編集モーダルを開く
-     * @param {number} id - メニューID
-     * @param {string} name - メニュー名
-     * @param {number} price - 価格
-     * @param {string} category - カテゴリ
-     */
-    function openEditModal(id, name, price, category) {
-        document.getElementById('edit-item-id').value = id;
-        document.getElementById('edit-name').value = name;
-        document.getElementById('edit-price').value = price;
-        document.getElementById('edit-category').value = category;
-        document.getElementById('edit-menu-modal').classList.remove('hidden');
-    }
-
-    /**
-     * 編集モーダルを閉じる
-     */
-    function closeEditModal() {
-        document.getElementById('edit-menu-modal').classList.add('hidden');
-    }
-
-    /**
-     * 削除確認ダイアログを開く
-     * @param {number} itemId - 削除するメニューID
-     * @param {string} itemName - 削除するメニュー名
-     */
-    function confirmDelete(itemId, itemName) {
-        document.getElementById('confirm-message').textContent = `「${itemName}」を本当に削除しますか？`;
-        const confirmButton = document.getElementById('confirm-action-button');
-        confirmButton.onclick = () => deleteMenuItem(itemId);
-        confirmButton.textContent = '削除'; // ボタンのテキストを「削除」に設定
-        confirmButton.className = 'bg-red-600 text-white px-5 py-2 rounded-md hover:bg-red-700 transition duration-300';
-        document.getElementById('confirm-dialog').classList.remove('hidden');
-    }
-
-    /**
-     * 削除確認ダイアログを閉じる
-     */
-    function closeConfirmDialog() {
-        document.getElementById('confirm-dialog').classList.add('hidden');
-    }
-
-    /**
-     * メニュー項目を削除
-     * @param {number} itemId - 削除するメニューID
-     */
-    async function deleteMenuItem(itemId) {
-        closeConfirmDialog(); // まずダイアログを閉じる
-        try {
-            const response = await fetch(`/admin/menu/delete/${itemId}`); // GETリクエストで削除
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const data = await response.json(); // FlaskからのレスポンスがJSONの場合
-            if (data.success) {
-                showToast('メニューを削除しました。', 'success');
-                setTimeout(() => location.reload(), 500); // ページをリロードして最新データを表示
-            } else {
-                showToast('メニューの削除に失敗しました。', 'error');
-            }
-        } catch (error) {
-            console.error('Error deleting menu item:', error);
-            showToast('メニューの削除中にエラーが発生しました。', 'error');
-        }
-    }
-
-    /**
-     * トースト通知を表示します。
-     * @param {string} message - 表示するメッセージ
-     * @param {string} type - 'success', 'error', 'info', 'warning'
-     */
-    function showToast(message, type) {
-        const toastContainer = document.getElementById('toast-container');
-        if (!toastContainer) {
-            console.error('Toast container not found.');
-            return;
-        }
-
-        const toast = document.createElement('div');
-        toast.className = `fixed bottom-4 right-4 p-4 rounded-lg shadow-lg text-white z-50 transition-all duration-300 transform translate-y-full opacity-0`;
-
-        let bgColor;
-        switch (type) {
-            case 'success': bgColor = colors.success; break;
-            case 'error': bgColor = colors.error; break;
-            case 'info': bgColor = colors.primary; break;
-            case 'warning': bgColor = colors.warning; break;
-            default: bgColor = colors.gray; break;
-        }
-        toast.style.backgroundColor = bgColor;
-        toast.textContent = message;
-
-        toastContainer.appendChild(toast);
-
-        // フェードイン
-        setTimeout(() => {
-            toast.classList.remove('translate-y-full', 'opacity-0');
-            toast.classList.add('translate-y-0', 'opacity-100');
-        }, 100);
-
-        // 自動で消える
-        setTimeout(() => {
-            toast.classList.remove('translate-y-0', 'opacity-100');
-            toast.classList.add('translate-y-full', 'opacity-0');
-            toast.addEventListener('transitionend', () => toast.remove());
-        }, 5000);
-    }
-</script>
-
+{% block extra_css %}
 <style>
-    /* モーダル表示アニメーション */
-    @keyframes scaleIn {
-        from { transform: scale(0.9); opacity: 0; }
-        to { transform: scale(1); opacity: 1; }
+    .page-container {
+        max-width: 1200px;
+        margin: 0 auto;
     }
-    .animate-scale-in {
-        animation: scaleIn 0.3s ease-out forwards;
+    .card-header h2 {
+        font-size: 1.8rem;
+        margin-bottom: 0;
     }
 </style>
+{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <h1 class="mb-4" style="font-size: 2.5rem;">🍔 メニュー管理</h1>
+
+    <div class="card mb-4">
+        <div class="card-header bg-transparent border-0 pt-3">
+            <h2>新しいメニューを追加</h2>
+        </div>
+        <div class="card-body">
+            <form id="add-menu-form" action="{{ url_for('add_menu_item') }}" method="POST" class="row g-3 align-items-end">
+                <div class="col-12 col-md-4">
+                    <label for="name" class="form-label">メニュー名</label>
+                    <input type="text" id="name" name="name" required class="form-control">
+                </div>
+                <div class="col-12 col-md-3">
+                    <label for="price" class="form-label">価格 (¥)</label>
+                    <input type="number" id="price" name="price" required min="0" class="form-control">
+                </div>
+                <div class="col-12 col-md-3">
+                    <label for="category" class="form-label">カテゴリ</label>
+                    <input type="text" id="category" name="category" required class="form-control">
+                </div>
+                <div class="col-12 col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">追加</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header bg-transparent border-0 pt-3">
+            <h2>メニュー一覧</h2>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th>メニュー名</th>
+                            <th>価格</th>
+                            <th>カテゴリ</th>
+                            <th>表示状態</th>
+                            <th class="text-end">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="menu-table-body">
+                        {% for item in menu_items %}
+                        <tr>
+                            <td>{{ item.name }}</td>
+                            <td>¥{{ item.price | int }}</td>
+                            <td>{{ item.category }}</td>
+                            <td>
+                                <span class="badge {% if item.active %}bg-success{% else %}bg-secondary{% endif %}">
+                                    {% if item.active %}表示中{% else %}非表示{% endif %}
+                                </span>
+                            </td>
+                            <td class="text-end">
+                                <div class="btn-group" role="group">
+                                    <button class="btn btn-sm btn-outline-secondary">切替</button>
+                                    <button class="btn btn-sm btn-outline-secondary">編集</button>
+                                    <button class="btn btn-sm btn-outline-danger">削除</button>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
