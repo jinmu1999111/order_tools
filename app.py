@@ -6,7 +6,7 @@ from flask import Flask, render_template, request, redirect, url_for, jsonify, f
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from sqlalchemy import func, desc
+from sqlalchemy import func, desc, inspect
 import pytz
 from collections import defaultdict
 
@@ -413,12 +413,11 @@ def delete_table(table_id):
         return jsonify(success=True)
     return jsonify(success=False), 404
 
-# --- データベース初期化コマンド ---
-@app.cli.command("init-db")
-def init_db_command():
-    """データベースをクリアし、初期データを投入します。"""
-    with app.app_context():
-        db.drop_all()
+# --- データベース自動初期化 ---
+with app.app_context():
+    inspector = inspect(db.engine)
+    if not inspector.has_table("user"):
+        print("INFO: Initializing the database...")
         db.create_all()
         admin_user = User(username='admin', is_admin=True)
         admin_user.set_password('password123')
@@ -430,15 +429,9 @@ def init_db_command():
             MenuItem(name='カルボナーラ', price=1200, category='パスタ'),
         ])
         db.session.commit()
-        print("データベースが初期化されました。")
+        print("INFO: Database initialized.")
+    else:
+        print("INFO: Database already exists.")
 
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
-        if not User.query.filter_by(username='admin').first():
-            admin_user = User(username='admin', is_admin=True)
-            admin_user.set_password('password123')
-            db.session.add(admin_user)
-            db.session.commit()
-            print("Default admin user created.")
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
