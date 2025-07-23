@@ -202,6 +202,63 @@ def api_generate_qr(table_id):
         expiry=table.qr_token_expiry.strftime('%Y-%m-%d %H:%M:%S')
     )
 
+@app.route('/api/order/submit', methods=['POST'])
+def submit_order():
+    data = request.get_json()
+    table = db.session.get(Table, data.get('table_id'))
+    if not table: return jsonify(success=False, message="テーブル情報がありません。"), 400
+    
+    session_id = secrets.token_hex(16)
+    
+    for item_id, item_data in data.get('items', {}).items():
+        menu_item = db.session.get(MenuItem, int(item_id))
+        if menu_item:
+            menu_item.popularity_count += item_data['quantity']
+            for _ in range(item_data['quantity']):
+                db.session.add(Order(item_name=item_data['name'], item_price=item_data['price'], table_id=table.id, session_id=session_id))
+    db.session.commit()
+    return jsonify(success=True)
+
+@app.route('/api/kitchen/orders')
+@login_required
+def api_kitchen_orders():
+    active_orders_query = Order.query.filter(Order.status.in_(['pending', 'cooking', 'served'])).order_by(Order.timestamp).all()
+    orders_by_session = defaultdict(list)
+    for order in active_orders_query:
+        orders_by_session[order.session_id].append(order)
+
+    orders_data = []
+    for session_id, items in orders_by_session.items():
+        if not items: continue
+        aggregated_items = defaultdict(lambda: {'quantity': 0, 'notes': ''})
+        for item in items: aggregated_items[item.item_name]['quantity'] += 1
+        
+        statuses = {item.status for item in items}
+        status_priority = ['pending', 'cooking', 'served']
+        group_status = 'served'
+        for s in status_priority:
+            if s in statuses:
+                group_status = s
+                break
+        
+        status_map_js = {'pending': 'pending', 'cooking': 'preparing', 'served': 'ready'}
+
+        orders_data.append({
+            'id': session_id,
+            'table_number': items[0].table.name,
+            'created_at': items[0].timestamp.isoformat(),
+            'status': status_map_js.get(group_status, 'pending'),
+            'items': [{'name': name, 'quantity': data['quantity'], 'notes': data['notes']} for name, data in aggregated_items.items()]
+        })
+
+    stats = {
+        "pending_orders": Order.query.filter_by(status='pending').count(),
+        "preparing_orders": Order.query.filter_by(status='cooking').count(),
+        "ready_orders": Order.query.filter_by(status='served').count(),
+        "total_orders": Order.query.filter(Order.timestamp >= datetime.datetime.now(JST).replace(hour=0, minute=0, second=0)).count()
+    }
+    return jsonify(success=True, orders=orders_data, stats=stats)
+
 # --- データベース初期化コマンド ---
 @app.cli.command("init-db")
 def init_db_command():
