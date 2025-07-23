@@ -1,102 +1,532 @@
-{% extends "layout.html" %}
-{% block title %}卓管理{% endblock %}
-{% block content %}
-<h1 class="mb-4">卓管理</h1>
+{% extends 'layout.html' %}
 
-<div class="card mb-4">
-    <div class="card-header">新規テーブル追加</div>
-    <div class="card-body">
-        <form action="{{ url_for('add_table') }}" method="post" class="row g-3 align-items-center">
-            <div class="col-md-6">
-                <input type="text" name="name" class="form-control" placeholder="テーブル名 (例: 3番卓, テラス席)" required>
+{% block title %}テーブル管理{% endblock %}
+
+{% block content %}
+<div class="container mx-auto p-4">
+    <h1 class="text-3xl font-bold text-gray-800 mb-6">🪑 テーブル管理</h1>
+
+    <!-- テーブル追加フォーム -->
+    <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+        <h2 class="text-xl font-semibold text-gray-700 mb-4">新しいテーブルを追加</h2>
+        <form action="{{ url_for('add_table') }}" method="POST" class="flex flex-col md:flex-row gap-4 items-end">
+            <div class="flex-grow">
+                <label for="table-name" class="block text-sm font-medium text-gray-700 mb-1">テーブル名</label>
+                <input type="text" id="table-name" name="name" required class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
             </div>
-            <div class="col-auto">
-                <button type="submit" class="btn btn-primary">追加</button>
+            <div>
+                <button type="submit" class="w-full bg-primary text-white px-4 py-2 rounded-md hover:bg-primary-dark transition duration-300 flex items-center justify-center">
+                    <i class="fas fa-plus mr-2"></i> テーブル追加
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- テーブル一覧とQRコード生成 -->
+    <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+        <h2 class="text-xl font-semibold text-gray-700 mb-4">テーブル一覧</h2>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" id="table-grid">
+            {% for table in tables %}
+            <div class="table-card bg-gray-50 rounded-lg shadow-sm p-4 border border-gray-200 flex flex-col items-center justify-between text-center" data-table-id="{{ table.id }}" data-table-name="{{ table.name }}" data-table-status="{{ table.status }}">
+                <h3 class="text-lg font-bold text-gray-800 mb-2">{{ table.name }}</h3>
+                <div class="text-sm font-medium mb-3">
+                    ステータス:
+                    <span class="px-2 py-1 rounded-full text-white text-xs {% if table.status == 'available' %}bg-green-500{% elif table.status == 'occupied' %}bg-red-500{% else %}bg-blue-500{% endif %}">
+                        {% if table.status == 'available' %}空き{% elif table.status == 'occupied' %}使用中{% else %}清掃中{% endif %}
+                    </span>
+                </div>
+
+                <!-- QRコード表示エリア -->
+                <div class="qr-code-container w-32 h-32 bg-white p-2 rounded-md border border-gray-300 flex items-center justify-center mb-4">
+                    <div id="qrcode-{{ table.id }}"></div>
+                </div>
+
+                <div class="flex flex-wrap justify-center gap-2 w-full">
+                    <button onclick="generateAndPrintQR({{ table.id }}, '{{ table.name }}')" class="bg-blue-500 text-white px-3 py-1 rounded-md text-sm hover:bg-blue-600 transition duration-300 flex items-center">
+                        <i class="fas fa-qrcode mr-1"></i> QR印刷
+                    </button>
+                    <button onclick="openStatusModal({{ table.id }}, '{{ table.name }}', '{{ table.status }}')" class="bg-yellow-500 text-white px-3 py-1 rounded-md text-sm hover:bg-yellow-600 transition duration-300 flex items-center">
+                        <i class="fas fa-sync-alt mr-1"></i> 状態変更
+                    </button>
+                    <button onclick="confirmDeleteTable({{ table.id }}, '{{ table.name }}')" class="bg-red-500 text-white px-3 py-1 rounded-md text-sm hover:bg-red-600 transition duration-300 flex items-center">
+                        <i class="fas fa-trash-alt mr-1"></i> 削除
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- フロアプラン表示 (Canvas) -->
+    <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+        <h2 class="text-xl font-semibold text-gray-700 mb-4">フロアプラン</h2>
+        <div class="flex justify-center items-center bg-gray-100 rounded-lg p-4">
+            <canvas id="floorPlanCanvas" class="border border-gray-300 rounded-md w-full max-w-full h-96"></canvas>
+        </div>
+        <div class="mt-4 text-center text-gray-600">
+            <p>テーブルをドラッグして配置を調整できます。</p>
+            <button id="save-floor-plan" class="mt-4 bg-primary text-white px-4 py-2 rounded-md hover:bg-primary-dark transition duration-300">
+                <i class="fas fa-save mr-2"></i> フロアプランを保存
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ステータス変更モーダル -->
+<div id="status-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden z-50">
+    <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm animate-scale-in">
+        <h2 class="text-2xl font-bold text-gray-800 mb-4">テーブルステータス変更</h2>
+        <p id="status-modal-table-name" class="text-lg text-gray-700 mb-4 font-semibold"></p>
+        <form id="update-status-form" method="POST">
+            <input type="hidden" id="status-modal-table-id" name="table_id">
+            <div class="mb-6">
+                <label for="new-status" class="block text-sm font-medium text-gray-700 mb-1">新しいステータス</label>
+                <select id="new-status" name="status" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
+                    <option value="available">空き</option>
+                    <option value="occupied">使用中</option>
+                    <option value="cleaning">清掃中</option>
+                </select>
+            </div>
+            <div class="flex justify-end gap-3">
+                <button type="button" onclick="closeStatusModal()" class="bg-gray-300 text-gray-800 px-5 py-2 rounded-md hover:bg-gray-400 transition duration-300">キャンセル</button>
+                <button type="submit" class="bg-primary text-white px-5 py-2 rounded-md hover:bg-primary-dark transition duration-300">更新</button>
             </div>
         </form>
     </div>
 </div>
 
-<div class="table-responsive">
-    <table class="table table-striped table-hover align-middle">
-        <thead>
-            <tr>
-                <th>テーブル名</th>
-                <th>注文用URL (コピー用)</th>
-                <th class="text-center">操作</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for table in tables %}
-            <tr>
-                <td>{{ table.name }}</td>
-                <td>
-                    <input type="text" class="form-control form-control-sm" value="{{ url_for('table_menu', table_id=table.id, _external=True) }}" readonly>
-                </td>
-                <td class="text-center">
-                    <button type="button" class="btn btn-sm btn-info qr-button" 
-                            data-bs-toggle="modal" 
-                            data-bs-target="#qrModal" 
-                            data-url="{{ url_for('table_menu', table_id=table.id, _external=True) }}"
-                            data-name="{{ table.name }}">
-                        <i class="bi bi-qr-code"></i> QR表示
-                    </button>
-
-                    <a href="{{ url_for('delete_table', table_id=table.id) }}" class="btn btn-sm btn-danger" onclick="return confirm('本当に「{{ table.name }}」を削除しますか？');">
-                        <i class="bi bi-trash"></i> 削除
-                    </a>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
-
-<div class="modal fade" id="qrModal" tabindex="-1" aria-labelledby="qrModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="qrModalLabel">テーブルQRコード</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-      </div>
-      <div class="modal-body text-center">
-        <h4 id="modalTableName" class="mb-3"></h4>
-        <div id="qrcode" class="d-flex justify-content-center"></div>
-        <p class="mt-3 text-muted">お客様にこのQRコードを読み取ってもらってください。</p>
-      </div>
+<!-- 確認ダイアログ -->
+<div id="confirm-dialog" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden z-50">
+    <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm animate-scale-in">
+        <h2 class="text-xl font-bold text-gray-800 mb-4">確認</h2>
+        <p id="confirm-message" class="text-gray-700 mb-6">本当に削除しますか？</p>
+        <div class="flex justify-end gap-3">
+            <button type="button" onclick="closeConfirmDialog()" class="bg-gray-300 text-gray-800 px-5 py-2 rounded-md hover:bg-gray-400 transition duration-300">キャンセル</button>
+            <button type="button" id="confirm-action-button" class="bg-red-600 text-white px-5 py-2 rounded-md hover:bg-red-700 transition duration-300">削除</button>
+        </div>
     </div>
-  </div>
 </div>
-{% endblock %}
 
-{% block scripts %}
-<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode.js/qrcode.min.js"></script>
 <script>
-document.addEventListener('DOMContentLoaded', function () {
-    const qrModal = document.getElementById('qrModal');
-    if(qrModal) {
-        const qrcodeContainer = document.getElementById('qrcode');
-        const modalTableName = document.getElementById('modalTableName');
-        let qrcode = null;
+    // カラーパレットの定義
+    const colors = {
+        primary: '#667eea',
+        secondary: '#ff6b6b',
+        success: '#2ed573',
+        warning: '#ffa502',
+        error: '#ff4757',
+        gray: '#e2e8f0'
+    };
 
-        qrModal.addEventListener('show.bs.modal', function (event) {
-            const button = event.relatedTarget;
-            const urlToEncode = button.getAttribute('data-url');
-            const tableName = button.getAttribute('data-name');
-            
-            modalTableName.textContent = tableName;
-            qrcodeContainer.innerHTML = '';
+    let floorPlanCanvas;
+    let ctx;
+    let tablesData = []; // テーブルの配置情報を保持
+    let draggingTable = null;
+    let offsetX, offsetY;
 
-            qrcode = new QRCode(qrcodeContainer, {
-                text: urlToEncode,
-                width: 256,
-                height: 256,
+    document.addEventListener('DOMContentLoaded', function() {
+        // 各テーブルのQRコードを生成
+        document.querySelectorAll('.table-card').forEach(card => {
+            const tableId = card.dataset.tableId;
+            const tableName = card.dataset.tableName;
+            // QRコードのURLは、Flaskのqr_authエンドポイントを指す
+            const qrUrl = `${window.location.origin}/qr/temp_token_for_${tableName}`; // 仮のトークン名
+            // 実際には、テーブルごとにユニークなトークンを生成し、QRTokenモデルに保存する必要があります。
+            // 例: `/qr/{{ table.qr_token }}` のようにFlask側でトークンを渡す
+
+            new QRCode(document.getElementById(`qrcode-${tableId}`), {
+                text: qrUrl,
+                width: 100,
+                height: 100,
                 colorDark : "#000000",
                 colorLight : "#ffffff",
                 correctLevel : QRCode.CorrectLevel.H
             });
         });
+
+        // フロアプランCanvasの初期化
+        floorPlanCanvas = document.getElementById('floorPlanCanvas');
+        ctx = floorPlanCanvas.getContext('2d');
+
+        // Canvasのサイズを親要素に合わせて調整
+        function resizeCanvas() {
+            floorPlanCanvas.width = floorPlanCanvas.offsetWidth;
+            floorPlanCanvas.height = floorPlanCanvas.offsetHeight;
+            drawFloorPlan();
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas(); // 初回ロード時にも実行
+
+        // テーブルデータの初期化（既存のテーブルから取得）
+        document.querySelectorAll('.table-card').forEach(card => {
+            tablesData.push({
+                id: card.dataset.tableId,
+                name: card.dataset.tableName,
+                status: card.dataset.tableStatus,
+                x: Math.random() * (floorPlanCanvas.width - 80), // ランダムな初期位置
+                y: Math.random() * (floorPlanCanvas.height - 80),
+                width: 80,
+                height: 80
+            });
+        });
+        drawFloorPlan();
+
+        // Canvasイベントリスナー
+        floorPlanCanvas.addEventListener('mousedown', (e) => {
+            const rect = floorPlanCanvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            for (let i = tablesData.length - 1; i >= 0; i--) {
+                const table = tablesData[i];
+                if (mouseX > table.x && mouseX < table.x + table.width &&
+                    mouseY > table.y && mouseY < table.y + table.height) {
+                    draggingTable = table;
+                    offsetX = mouseX - table.x;
+                    offsetY = mouseY - table.y;
+                    // ドラッグ中のテーブルを最前面に
+                    tablesData.splice(i, 1);
+                    tablesData.push(table);
+                    drawFloorPlan();
+                    break;
+                }
+            }
+        });
+
+        floorPlanCanvas.addEventListener('mousemove', (e) => {
+            if (draggingTable) {
+                const rect = floorPlanCanvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+
+                draggingTable.x = mouseX - offsetX;
+                draggingTable.y = mouseY - offsetY;
+
+                // 境界チェック
+                draggingTable.x = Math.max(0, Math.min(draggingTable.x, floorPlanCanvas.width - draggingTable.width));
+                draggingTable.y = Math.max(0, Math.min(draggingTable.y, floorPlanCanvas.height - draggingTable.height));
+
+                drawFloorPlan();
+            }
+        });
+
+        floorPlanCanvas.addEventListener('mouseup', () => {
+            draggingTable = null;
+        });
+
+        // タッチイベント対応
+        floorPlanCanvas.addEventListener('touchstart', (e) => {
+            e.preventDefault(); // スクロール防止
+            const touch = e.touches[0];
+            const rect = floorPlanCanvas.getBoundingClientRect();
+            const touchX = touch.clientX - rect.left;
+            const touchY = touch.clientY - rect.top;
+
+            for (let i = tablesData.length - 1; i >= 0; i--) {
+                const table = tablesData[i];
+                if (touchX > table.x && touchX < table.x + table.width &&
+                    touchY > table.y && touchY < table.y + table.height) {
+                    draggingTable = table;
+                    offsetX = touchX - table.x;
+                    offsetY = touchY - table.y;
+                    tablesData.splice(i, 1);
+                    tablesData.push(table);
+                    drawFloorPlan();
+                    break;
+                }
+            }
+        });
+
+        floorPlanCanvas.addEventListener('touchmove', (e) => {
+            e.preventDefault(); // スクロール防止
+            if (draggingTable) {
+                const touch = e.touches[0];
+                const rect = floorPlanCanvas.getBoundingClientRect();
+                const touchX = touch.clientX - rect.left;
+                const touchY = touch.clientY - rect.top;
+
+                draggingTable.x = touchX - offsetX;
+                draggingTable.y = touchY - offsetY;
+
+                draggingTable.x = Math.max(0, Math.min(draggingTable.x, floorPlanCanvas.width - draggingTable.width));
+                draggingTable.y = Math.max(0, Math.min(draggingTable.y, floorPlanCanvas.height - draggingTable.height));
+
+                drawFloorPlan();
+            }
+        });
+
+        floorPlanCanvas.addEventListener('touchend', () => {
+            draggingTable = null;
+        });
+
+        // フロアプラン保存ボタン
+        document.getElementById('save-floor-plan').addEventListener('click', async () => {
+            // テーブルの最新のx, y座標をサーバーに保存
+            try {
+                const response = await fetch('/api/tables/save_positions', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ tables: tablesData.map(t => ({ id: t.id, x: t.x, y: t.y })) })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showToast('フロアプランを保存しました。', 'success');
+                } else {
+                    showToast('フロアプランの保存に失敗しました。', 'error');
+                }
+            } catch (error) {
+                console.error('Error saving floor plan:', error);
+                showToast('フロアプランの保存中にエラーが発生しました。', 'error');
+            }
+        });
+    });
+
+    /**
+     * フロアプランを描画します。
+     */
+    function drawFloorPlan() {
+        ctx.clearRect(0, 0, floorPlanCanvas.width, floorPlanCanvas.height); // キャンバスをクリア
+
+        tablesData.forEach(table => {
+            // テーブルの描画
+            ctx.fillStyle = '#667eea'; // プライマリカラー
+            ctx.fillRect(table.x, table.y, table.width, table.height);
+            ctx.strokeStyle = '#4a5568';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(table.x, table.y, table.width, table.height);
+
+            // ステータスに応じた色で枠線
+            if (table.status === 'occupied') {
+                ctx.strokeStyle = colors.error; // 赤
+            } else if (table.status === 'available') {
+                ctx.strokeStyle = colors.success; // 緑
+            } else if (table.status === 'cleaning') {
+                ctx.strokeStyle = colors.warning; // オレンジ
+            }
+            ctx.lineWidth = 4;
+            ctx.strokeRect(table.x, table.y, table.width, table.height);
+
+
+            // テーブル名の描画
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '14px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(table.name, table.x + table.width / 2, table.y + table.height / 2 - 10);
+
+            // ステータスの描画
+            ctx.font = '12px Inter, sans-serif';
+            ctx.fillText(
+                table.status === 'available' ? '空き' :
+                table.status === 'occupied' ? '使用中' :
+                '清掃中',
+                table.x + table.width / 2, table.y + table.height / 2 + 10
+            );
+        });
     }
-});
+
+    /**
+     * QRコードを生成し、印刷ダイアログを開きます。
+     * @param {number} tableId - テーブルID
+     * @param {string} tableName - テーブル名
+     */
+    function generateAndPrintQR(tableId, tableName) {
+        // 実際には、サーバーからテーブルIDに対応するユニークなトークンを取得し、
+        // それを使ってQRコードのURLを生成する必要があります。
+        // ここでは仮のURLを使用します。
+        const qrUrl = `${window.location.origin}/qr/temp_token_for_${tableName}`; // 仮のトークン名
+
+        const printWindow = window.open('', '_blank', 'width=400,height=400');
+        printWindow.document.write(`
+            <html>
+            <head>
+                <title>${tableName} QRコード</title>
+                <style>
+                    body { font-family: 'Inter', sans-serif; display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+                    .qr-print-container { text-align: center; padding: 20px; border: 1px solid #ccc; border-radius: 8px; }
+                    h1 { font-size: 24px; margin-bottom: 20px; }
+                    canvas { border: 1px solid #eee; }
+                </style>
+            </head>
+            <body>
+                <div class="qr-print-container">
+                    <h1>${tableName}</h1>
+                    <canvas id="printQrCanvas"></canvas>
+                    <p>このQRコードをスキャンして注文してください。</p>
+                </div>
+                <script src="https://cdn.jsdelivr.net/npm/qrcode.js/qrcode.min.js"></script>
+                <script>
+                    window.onload = function() {
+                        new QRCode(document.getElementById('printQrCanvas'), {
+                            text: '${qrUrl}',
+                            width: 256,
+                            height: 256,
+                            colorDark : "#000000",
+                            colorLight : "#ffffff",
+                            correctLevel : QRCode.CorrectLevel.H
+                        });
+                        setTimeout(() => {
+                            window.print();
+                            window.onafterprint = function() {
+                                window.close();
+                            };
+                        }, 500); // QRコード生成を待ってから印刷
+                    };
+                </script>
+            </body>
+            </html>
+        `);
+        printWindow.document.close();
+    }
+
+    /**
+     * ステータス変更モーダルを開く
+     * @param {number} tableId - テーブルID
+     * @param {string} tableName - テーブル名
+     * @param {string} currentStatus - 現在のステータス
+     */
+    function openStatusModal(tableId, tableName, currentStatus) {
+        document.getElementById('status-modal-table-id').value = tableId;
+        document.getElementById('status-modal-table-name').textContent = `テーブル: ${tableName}`;
+        document.getElementById('new-status').value = currentStatus;
+        document.getElementById('update-status-form').action = `/admin/tables/update_status/${tableId}`;
+        document.getElementById('status-modal').classList.remove('hidden');
+    }
+
+    /**
+     * ステータス変更モーダルを閉じる
+     */
+    function closeStatusModal() {
+        document.getElementById('status-modal').classList.add('hidden');
+    }
+
+    /**
+     * 削除確認ダイアログを開く
+     * @param {number} tableId - 削除するテーブルID
+     * @param {string} tableName - 削除するテーブル名
+     */
+    function confirmDeleteTable(tableId, tableName) {
+        document.getElementById('confirm-message').textContent = `テーブル「${tableName}」を本当に削除しますか？ (関連する注文履歴も削除されます)`;
+        const confirmButton = document.getElementById('confirm-action-button');
+        confirmButton.onclick = () => deleteTable(tableId);
+        confirmButton.textContent = '削除'; // ボタンのテキストを「削除」に設定
+        confirmButton.className = 'bg-red-600 text-white px-5 py-2 rounded-md hover:bg-red-700 transition duration-300';
+        document.getElementById('confirm-dialog').classList.remove('hidden');
+    }
+
+    /**
+     * 削除確認ダイアログを閉じる
+     */
+    function closeConfirmDialog() {
+        document.getElementById('confirm-dialog').classList.add('hidden');
+    }
+
+    /**
+     * テーブルを削除
+     * @param {number} tableId - 削除するテーブルID
+     */
+    async function deleteTable(tableId) {
+        closeConfirmDialog(); // まずダイアログを閉じる
+        try {
+            const response = await fetch(`/admin/tables/delete/${tableId}`); // GETリクエストで削除
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json(); // FlaskからのレスポンスがJSONの場合
+            if (data.success) {
+                showToast('テーブルを削除しました。', 'success');
+                setTimeout(() => location.reload(), 500); // ページをリロードして最新データを表示
+            } else {
+                showToast('テーブルの削除に失敗しました。', 'error');
+            }
+        } catch (error) {
+            console.error('Error deleting table:', error);
+            showToast('テーブルの削除中にエラーが発生しました。', 'error');
+        }
+    }
+
+    /**
+     * トースト通知を表示します。
+     * @param {string} message - 表示するメッセージ
+     * @param {string} type - 'success', 'error', 'info', 'warning'
+     */
+    function showToast(message, type) {
+        const toastContainer = document.getElementById('toast-container');
+        if (!toastContainer) {
+            console.error('Toast container not found.');
+            return;
+        }
+
+        const toast = document.createElement('div');
+        toast.className = `fixed bottom-4 right-4 p-4 rounded-lg shadow-lg text-white z-50 transition-all duration-300 transform translate-y-full opacity-0`;
+
+        let bgColor;
+        switch (type) {
+            case 'success': bgColor = colors.success; break;
+            case 'error': bgColor = colors.error; break;
+            case 'info': bgColor = colors.primary; break;
+            case 'warning': bgColor = colors.warning; break;
+            default: bgColor = colors.gray; break;
+        }
+        toast.style.backgroundColor = bgColor;
+        toast.textContent = message;
+
+        toastContainer.appendChild(toast);
+
+        // フェードイン
+        setTimeout(() => {
+            toast.classList.remove('translate-y-full', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+        }, 100);
+
+        // 自動で消える
+        setTimeout(() => {
+            toast.classList.remove('translate-y-0', 'opacity-100');
+            toast.classList.add('translate-y-full', 'opacity-0');
+            toast.addEventListener('transitionend', () => toast.remove());
+        }, 5000);
+    }
 </script>
+
+<style>
+    /* モーダル表示アニメーション */
+    @keyframes scaleIn {
+        from { transform: scale(0.9); opacity: 0; }
+        to { transform: scale(1); opacity: 1; }
+    }
+    .animate-scale-in {
+        animation: scaleIn 0.3s ease-out forwards;
+    }
+
+    /* Canvasのレスポンシブ対応 */
+    #floorPlanCanvas {
+        max-width: 100%;
+        height: auto; /* 高さを自動調整 */
+    }
+
+    /* 印刷用スタイル */
+    @media print {
+        body * {
+            visibility: hidden;
+        }
+        .qr-print-container, .qr-print-container * {
+            visibility: visible;
+        }
+        .qr-print-container {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+    }
+</style>
 {% endblock %}
