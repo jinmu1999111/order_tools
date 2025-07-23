@@ -1,17 +1,10 @@
 {% extends 'layout.html' %}
-
 {% block title %}メニュー管理{% endblock %}
 
 {% block extra_css %}
 <style>
-    .page-container {
-        max-width: 1200px;
-        margin: 0 auto;
-    }
-    .card-header h2 {
-        font-size: 1.8rem;
-        margin-bottom: 0;
-    }
+    .page-container { max-width: 1200px; margin: 0 auto; }
+    .card-header h2 { font-size: 1.8rem; margin-bottom: 0; }
 </style>
 {% endblock %}
 
@@ -24,7 +17,7 @@
             <h2>新しいメニューを追加</h2>
         </div>
         <div class="card-body">
-            <form id="add-menu-form" action="{{ url_for('add_menu_item') }}" method="POST" class="row g-3 align-items-end">
+            <form id="add-menu-form" class="row g-3 align-items-end">
                 <div class="col-12 col-md-4">
                     <label for="name" class="form-label">メニュー名</label>
                     <input type="text" id="name" name="name" required class="form-control">
@@ -62,7 +55,7 @@
                     </thead>
                     <tbody id="menu-table-body">
                         {% for item in menu_items %}
-                        <tr>
+                        <tr id="item-row-{{ item.id }}">
                             <td>{{ item.name }}</td>
                             <td>¥{{ item.price | int }}</td>
                             <td>{{ item.category }}</td>
@@ -73,9 +66,8 @@
                             </td>
                             <td class="text-end">
                                 <div class="btn-group" role="group">
-                                    <button class="btn btn-sm btn-outline-secondary">切替</button>
-                                    <button class="btn btn-sm btn-outline-secondary">編集</button>
-                                    <button class="btn btn-sm btn-outline-danger">削除</button>
+                                    <button class="btn btn-sm btn-outline-secondary" onclick="toggleActive({{ item.id }})">切替</button>
+                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteItem({{ item.id }})">削除</button>
                                 </div>
                             </td>
                         </tr>
@@ -86,4 +78,50 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.getElementById('add-menu-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const form = e.target;
+        const name = form.name.value;
+        const price = form.price.value;
+        const category = form.category.value;
+
+        const response = await fetch('/api/menu/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, price, category })
+        });
+        
+        if (response.ok) {
+            alert('メニューを追加しました。');
+            location.reload();
+        } else {
+            const data = await response.json();
+            alert(`追加に失敗しました: ${data.message}`);
+        }
+    });
+
+    async function deleteItem(itemId) {
+        if (!confirm('本当にこのメニューを削除しますか？')) return;
+        
+        const response = await fetch(`/api/menu/${itemId}`, { method: 'DELETE' });
+        if (response.ok) {
+            document.getElementById(`item-row-${itemId}`).remove();
+        } else {
+            alert('削除に失敗しました。');
+        }
+    }
+
+    async function toggleActive(itemId) {
+        const response = await fetch(`/api/menu/toggle/${itemId}`, { method: 'POST' });
+        if (response.ok) {
+            location.reload();
+        } else {
+            alert('状態の切り替えに失敗しました。');
+        }
+    }
+</script>
 {% endblock %}
