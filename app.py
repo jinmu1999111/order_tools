@@ -168,7 +168,8 @@ def kitchen():
 @login_required
 def admin_history():
     tables = Table.query.order_by(Table.name).all()
-    return render_template('admin_history.html', tables=tables)
+    # ▼▼▼ Order=Order を追加して、HTMLにOrderクラスを渡す ▼▼▼
+    return render_template('admin_history.html', tables=tables, Order=Order)
 
 @app.route('/admin/history/clear/<int:table_id>', methods=['POST'])
 @login_required

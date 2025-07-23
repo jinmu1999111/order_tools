@@ -49,29 +49,37 @@
     const TABLE_ID = {{ table.id }};
     let cart = [];
 
+    // カートに商品を追加
     function addToCart(item) {
         cart.push(item);
         updateCartDisplay();
     }
 
+    // カートの表示とボタンの状態を更新
     function updateCartDisplay() {
         const cartList = document.getElementById('cart-list');
         const submitBtn = document.getElementById('submit-btn');
         cartList.innerHTML = '';
+
         if (cart.length === 0) {
             cartList.innerHTML = '<li class="list-group-item text-muted">メニューから商品を選択してください</li>';
-            submitBtn.disabled = true;
+            if (submitBtn) {
+                submitBtn.disabled = true; // カートが空ならボタンを無効化
+            }
         } else {
-             submitBtn.disabled = false;
+            if (submitBtn) {
+                submitBtn.disabled = false; // カートに商品があればボタンを有効化
+            }
+            cart.forEach((item, index) => {
+                const li = document.createElement('li');
+                li.className = 'list-group-item';
+                li.innerHTML = `${item.name} <span class="float-end">${item.price}円</span>`;
+                cartList.appendChild(li);
+            });
         }
-        cart.forEach((item, index) => {
-            const li = document.createElement('li');
-            li.className = 'list-group-item';
-            li.innerHTML = `${item.name} <span class="float-end">${item.price}円</span>`;
-            cartList.appendChild(li);
-        });
     }
 
+    // 注文をサーバーに送信
     async function submitOrder() {
         if (cart.length === 0) {
             alert('カートに商品がありません。');
@@ -91,6 +99,7 @@
         }
     }
 
+    // 確定済みの注文状況をサーバーから取得して表示
     async function updateOrderStatus() {
         const response = await fetch(`/api/table_status/${TABLE_ID}`);
         const data = await response.json();
@@ -111,6 +120,7 @@
         document.getElementById('total-price').textContent = `${data.total_price}円`;
     }
 
+    // 初期表示と自動更新
     document.addEventListener('DOMContentLoaded', () => {
         updateCartDisplay();
         updateOrderStatus();
