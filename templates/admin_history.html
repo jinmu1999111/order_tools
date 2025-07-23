@@ -6,7 +6,6 @@
 <div class="container mx-auto p-4">
     <h1 class="text-3xl font-bold text-gray-800 mb-6">📜 注文履歴管理</h1>
 
-    <!-- 検索・フィルターパネル -->
     <div class="bg-white rounded-lg shadow-md p-6 mb-8">
         <h2 class="text-xl font-semibold text-gray-700 mb-4">注文検索・フィルター</h2>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
@@ -34,625 +33,177 @@
                 </select>
             </div>
         </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-                <label for="filter-start-date" class="block text-sm font-medium text-gray-700 mb-1">開始日</label>
-                <input type="date" id="filter-start-date" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-            </div>
-            <div>
-                <label for="filter-end-date" class="block text-sm font-medium text-gray-700 mb-1">終了日</label>
-                <input type="date" id="filter-end-date" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary">
-            </div>
-        </div>
         <div class="mt-6 flex justify-end gap-3">
             <button id="reset-filters" class="bg-gray-400 text-white px-5 py-2 rounded-md hover:bg-gray-500 transition duration-300">
-                <i class="fas fa-redo mr-2"></i> フィルターリセット
+                <i class="fas fa-redo mr-2"></i> リセット
             </button>
             <button id="apply-filters" class="bg-primary text-white px-5 py-2 rounded-md hover:bg-primary-dark transition duration-300">
-                <i class="fas fa-filter mr-2"></i> フィルター適用
+                <i class="fas fa-filter mr-2"></i> 適用
             </button>
         </div>
     </div>
 
-    <!-- 注文履歴一覧 -->
     <div class="bg-white rounded-lg shadow-md p-6">
         <h2 class="text-xl font-semibold text-gray-700 mb-4">注文履歴</h2>
-
-        <div class="flex justify-end mb-4">
-            <button id="export-csv" class="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition duration-300 mr-2">
-                <i class="fas fa-file-csv mr-2"></i> CSVエクスポート
-            </button>
-            <button id="export-pdf" class="bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600 transition duration-300">
-                <i class="fas fa-file-pdf mr-2"></i> PDFエクスポート
-            </button>
-        </div>
 
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                     <tr>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" data-sort="id">
-                            注文ID <i class="fas fa-sort text-gray-400 ml-1"></i>
-                        </th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" data-sort="table_name">
-                            テーブル <i class="fas fa-sort text-gray-400 ml-1"></i>
-                        </th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            メニュー
-                        </th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" data-sort="item_price">
-                            価格 <i class="fas fa-sort text-gray-400 ml-1"></i>
-                        </th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" data-sort="status">
-                            ステータス <i class="fas fa-sort text-gray-400 ml-1"></i>
-                        </th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" data-sort="timestamp">
-                            注文日時 <i class="fas fa-sort text-gray-400 ml-1"></i>
-                        </th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            操作
-                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">注文ID</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">テーブル</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">メニュー</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">価格</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ステータス</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">注文日時</th>
                     </tr>
                 </thead>
                 <tbody id="order-history-table-body" class="bg-white divide-y divide-gray-200">
-                    <!-- 注文履歴はJSで動的に追加 -->
-                </tbody>
+                    </tbody>
             </table>
         </div>
 
-        <!-- ページネーション -->
         <nav class="flex justify-center items-center gap-2 mt-6" aria-label="Pagination">
-            <button id="prev-page" class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-                前へ
-            </button>
+            <button id="prev-page" class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">前へ</button>
             <span id="page-info" class="text-gray-700 text-sm"></span>
-            <button id="next-page" class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
-                次へ
-            </button>
+            <button id="next-page" class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">次へ</button>
         </nav>
     </div>
 </div>
 
-<!-- 詳細モーダル -->
-<div id="detail-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden z-50">
-    <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md animate-scale-in">
-        <h2 class="text-2xl font-bold text-gray-800 mb-4">注文詳細</h2>
-        <div id="detail-content" class="text-gray-700 mb-6">
-            <!-- 詳細内容はJSで動的に追加 -->
-        </div>
-        <div class="flex justify-end gap-3">
-            <button type="button" onclick="closeDetailModal()" class="bg-gray-300 text-gray-800 px-5 py-2 rounded-md hover:bg-gray-400 transition duration-300">閉じる</button>
-            <button type="button" id="refund-button" class="bg-red-600 text-white px-5 py-2 rounded-md hover:bg-red-700 transition duration-300">
-                <i class="fas fa-undo mr-2"></i> 返金/キャンセル
-            </button>
-        </div>
-    </div>
-</div>
-
-<!-- 確認ダイアログ -->
-<div id="confirm-dialog" class="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center hidden z-50">
-    <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm animate-scale-in">
-        <h2 class="text-xl font-bold text-gray-800 mb-4">確認</h2>
-        <p id="confirm-message" class="text-gray-700 mb-6">本当に処理を実行しますか？</p>
-        <div class="flex justify-end gap-3">
-            <button type="button" onclick="closeConfirmDialog()" class="bg-gray-300 text-gray-800 px-5 py-2 rounded-md hover:bg-gray-400 transition duration-300">キャンセル</button>
-            <button type="button" id="confirm-action-button" class="bg-red-600 text-white px-5 py-2 rounded-md hover:bg-red-700 transition duration-300">実行</button>
-        </div>
-    </div>
-</div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
 <script>
-    // カラーパレットの定義
-    const colors = {
-        primary: '#667eea',
-        secondary: '#ff6b6b',
-        success: '#2ed573',
-        warning: '#ffa502',
-        error: '#ff4757',
-        gray: '#e2e8f0'
-    };
-
-    let allOrders = []; // 全ての注文データを保持
-    let filteredOrders = []; // フィルター後の注文データ
+    let allOrders = [];
+    let filteredOrders = [];
     let currentPage = 1;
-    const itemsPerPage = 10; // 1ページあたりの表示数
-    let currentSortColumn = 'timestamp';
-    let currentSortDirection = 'desc'; // 'asc' or 'desc'
+    const itemsPerPage = 10;
 
     document.addEventListener('DOMContentLoaded', function() {
         fetchOrderHistory();
 
-        // フィルター適用ボタン
-        document.getElementById('apply-filters').addEventListener('click', applyFiltersAndSort);
-        // フィルターリセットボタン
+        document.getElementById('apply-filters').addEventListener('click', applyFilters);
         document.getElementById('reset-filters').addEventListener('click', resetFilters);
 
-        // ページネーションボタン
         document.getElementById('prev-page').addEventListener('click', () => {
             if (currentPage > 1) {
                 currentPage--;
                 renderOrders();
             }
         });
+
         document.getElementById('next-page').addEventListener('click', () => {
             if (currentPage * itemsPerPage < filteredOrders.length) {
                 currentPage++;
                 renderOrders();
             }
         });
-
-        // ソート機能
-        document.querySelectorAll('th[data-sort]').forEach(header => {
-            header.addEventListener('click', function() {
-                const column = this.dataset.sort;
-                if (currentSortColumn === column) {
-                    currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
-                } else {
-                    currentSortColumn = column;
-                    currentSortDirection = 'asc'; // デフォルトは昇順
-                }
-                applyFiltersAndSort(); // ソートを適用して再描画
-            });
-        });
-
-        // CSVエクスポート
-        document.getElementById('export-csv').addEventListener('click', exportCsv);
-        // PDFエクスポート
-        document.getElementById('export-pdf').addEventListener('click', exportPdf);
-
-        // 返金/キャンセルボタンのイベントリスナー（詳細モーダル内）
-        document.getElementById('refund-button').addEventListener('click', function() {
-            const orderId = this.dataset.orderId; // このボタンに注文IDをセットしておく
-            if (orderId) {
-                confirmAction('この注文を返金/キャンセルしますか？', () => processRefundCancel(orderId));
-            }
-        });
     });
 
-    /**
-     * 注文履歴データをAPIからフェッチします。
-     */
     async function fetchOrderHistory() {
         try {
-            const response = await fetch('/api/history/orders'); // 新しいAPIエンドポイントを想定
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
+            const response = await fetch('/api/history/orders');
+            if (!response.ok) throw new Error('Network response was not ok');
             const data = await response.json();
-            allOrders = data.orders; // 全ての注文データを保存
-            applyFiltersAndSort(); // フィルターとソートを適用して初期表示
+            allOrders = data.orders;
+            filteredOrders = [...allOrders];
+            renderOrders();
         } catch (error) {
             console.error('Failed to fetch order history:', error);
-            showToast('注文履歴の取得に失敗しました。', 'error');
+            document.getElementById('order-history-table-body').innerHTML = `<tr><td colspan="6" class="text-center py-4">履歴の読み込みに失敗しました。</td></tr>`;
         }
     }
 
-    /**
-     * フィルターとソートを適用し、注文データを更新します。
-     */
-    function applyFiltersAndSort() {
-        let tempOrders = [...allOrders]; // 元のデータを変更しないようにコピー
-
-        // 1. フィルター
+    function applyFilters() {
         const keyword = document.getElementById('search-keyword').value.toLowerCase();
-        const tableFilter = document.getElementById('filter-table').value;
-        const statusFilter = document.getElementById('filter-status').value;
-        const startDate = document.getElementById('filter-start-date').value;
-        const endDate = document.getElementById('filter-end-date').value;
+        const table = document.getElementById('filter-table').value;
+        const status = document.getElementById('filter-status').value;
 
-        filteredOrders = tempOrders.filter(order => {
-            const matchesKeyword = (order.item_name.toLowerCase().includes(keyword) || order.table_name.toLowerCase().includes(keyword));
-            const matchesTable = tableFilter === '' || order.table_name === tableFilter;
-            const matchesStatus = statusFilter === '' || order.status === statusFilter;
-
-            // 日付フィルター
-            let matchesDate = true;
-            if (startDate) {
-                const orderDate = new Date(order.timestamp.split('T')[0]); // YYYY-MM-DD形式に変換
-                const start = new Date(startDate);
-                if (orderDate < start) matchesDate = false;
-            }
-            if (endDate) {
-                const orderDate = new Date(order.timestamp.split('T')[0]);
-                const end = new Date(endDate);
-                if (orderDate > end) matchesDate = false;
-            }
-
-            return matchesKeyword && matchesTable && matchesStatus && matchesDate;
+        filteredOrders = allOrders.filter(order => {
+            const matchKeyword = order.item_name.toLowerCase().includes(keyword) || order.table_name.toLowerCase().includes(keyword);
+            const matchTable = !table || order.table_name === table;
+            const matchStatus = !status || order.status === status;
+            return matchKeyword && matchTable && matchStatus;
         });
 
-        // 2. ソート
-        filteredOrders.sort((a, b) => {
-            let valA, valB;
-
-            switch (currentSortColumn) {
-                case 'id':
-                    valA = a.id;
-                    valB = b.id;
-                    break;
-                case 'table_name':
-                    valA = a.table_name;
-                    valB = b.table_name;
-                    break;
-                case 'item_price':
-                    valA = a.item_price;
-                    valB = b.item_price;
-                    break;
-                case 'status':
-                    valA = a.status;
-                    valB = b.status;
-                    break;
-                case 'timestamp':
-                    valA = new Date(a.timestamp);
-                    valB = new Date(b.timestamp);
-                    break;
-                default:
-                    return 0;
-            }
-
-            if (valA < valB) return currentSortDirection === 'asc' ? -1 : 1;
-            if (valA > valB) return currentSortDirection === 'asc' ? 1 : -1;
-            return 0;
-        });
-
-        currentPage = 1; // フィルター・ソート適用後は1ページ目に戻る
+        currentPage = 1;
         renderOrders();
     }
 
-    /**
-     * フィルターをリセットします。
-     */
     function resetFilters() {
         document.getElementById('search-keyword').value = '';
         document.getElementById('filter-table').value = '';
         document.getElementById('filter-status').value = '';
-        document.getElementById('filter-start-date').value = '';
-        document.getElementById('filter-end-date').value = '';
-        currentSortColumn = 'timestamp'; // ソートもリセット
-        currentSortDirection = 'desc';
-        applyFiltersAndSort();
+        filteredOrders = [...allOrders];
+        currentPage = 1;
+        renderOrders();
     }
 
-    /**
-     * 注文データをテーブルに描画します。
-     */
     function renderOrders() {
         const tableBody = document.getElementById('order-history-table-body');
-        tableBody.innerHTML = ''; // クリア
+        tableBody.innerHTML = '';
 
         const startIndex = (currentPage - 1) * itemsPerPage;
         const endIndex = startIndex + itemsPerPage;
-        const ordersToDisplay = filteredOrders.slice(startIndex, endIndex);
+        const pagedOrders = filteredOrders.slice(startIndex, endIndex);
 
-        if (ordersToDisplay.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">該当する注文履歴はありません。</td></tr>';
-            document.getElementById('page-info').textContent = '0件 / 0ページ';
-            return;
+        if (pagedOrders.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="6" class="text-center py-4">該当する注文履歴はありません。</td></tr>';
         }
 
-        ordersToDisplay.forEach(order => {
+        pagedOrders.forEach(order => {
             const row = document.createElement('tr');
-            row.className = 'hover:bg-gray-100 transition duration-150';
             row.innerHTML = `
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${order.id}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.table_name}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.item_name}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">¥${order.item_price.toLocaleString()}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm">
-                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getOrderStatusClass(order.status)}">
-                        ${getOrderStatusDisplay(order.status)}
+                <td class="px-6 py-4 whitespace-nowrap">${order.id}</td>
+                <td class="px-6 py-4 whitespace-nowrap">${order.table_name}</td>
+                <td class="px-6 py-4 whitespace-nowrap">${order.item_name}</td>
+                <td class="px-6 py-4 whitespace-nowrap">¥${order.item_price.toLocaleString()}</td>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusClass(order.status)}">
+                        ${getStatusDisplay(order.status)}
                     </span>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${new Date(order.timestamp).toLocaleString('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button onclick="openDetailModal(${order.id})" class="text-indigo-600 hover:text-indigo-900 mr-3 transition duration-150">
-                        <i class="fas fa-info-circle"></i> 詳細
-                    </button>
-                    <button onclick="confirmAction('この注文の履歴をクリアしますか？', () => clearOrderHistory(${order.id}))" class="text-red-600 hover:text-red-900 transition duration-150">
-                        <i class="fas fa-eraser"></i> クリア
-                    </button>
-                </td>
+                <td class="px-6 py-4 whitespace-nowrap">${new Date(order.timestamp).toLocaleString('ja-JP')}</td>
             `;
             tableBody.appendChild(row);
         });
 
-        // ページネーション情報の更新
+        updatePagination();
+    }
+    
+    function getStatusClass(status) {
+        const classes = {
+            pending: 'bg-yellow-100 text-yellow-800',
+            cooking: 'bg-blue-100 text-blue-800',
+            served: 'bg-green-100 text-green-800',
+            cancelled: 'bg-red-100 text-red-800',
+        };
+        return classes[status] || 'bg-gray-100 text-gray-800';
+    }
+
+    function getStatusDisplay(status) {
+        const display = {
+            pending: '注文受付',
+            cooking: '調理中',
+            served: '提供済',
+            cancelled: 'キャンセル',
+        };
+        return display[status] || status;
+    }
+
+    function updatePagination() {
         const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
-        document.getElementById('page-info').textContent = `${currentPage} / ${totalPages} ページ (${filteredOrders.length} 件)`;
+        document.getElementById('page-info').textContent = `${currentPage} / ${totalPages || 1} ページ`;
         document.getElementById('prev-page').disabled = currentPage === 1;
-        document.getElementById('next-page').disabled = currentPage === totalPages || filteredOrders.length === 0;
+        document.getElementById('next-page').disabled = currentPage >= totalPages;
     }
 
-    /**
-     * 注文ステータスに応じたCSSクラスを返します。
-     * @param {string} status - 注文ステータス
-     * @returns {string} CSSクラス
-     */
-    function getOrderStatusClass(status) {
-        switch (status) {
-            case 'pending':
-                return 'bg-yellow-100 text-yellow-800';
-            case 'cooking':
-                return 'bg-blue-100 text-blue-800';
-            case 'served':
-                return 'bg-green-100 text-green-800';
-            case 'cancelled':
-                return 'bg-red-100 text-red-800';
-            default:
-                return 'bg-gray-100 text-gray-800';
-        }
-    }
-
-    /**
-     * 注文ステータスの表示名を返します。
-     * @param {string} status - 注文ステータス
-     * @returns {string} 表示名
-     */
-    function getOrderStatusDisplay(status) {
-        return {
-            'pending': '注文受付',
-            'cooking': '調理中',
-            'served': '提供済',
-            'cancelled': 'キャンセル'
-        }[status] || status;
-    }
-
-    /**
-     * 詳細モーダルを開く
-     * @param {number} orderId - 注文ID
-     */
-    function openDetailModal(orderId) {
-        const order = allOrders.find(o => o.id === orderId);
-        if (!order) {
-            showToast('注文データが見つかりません。', 'error');
-            return;
-        }
-
-        const detailContent = document.getElementById('detail-content');
-        detailContent.innerHTML = `
-            <p><strong class="text-gray-900">注文ID:</strong> ${order.id}</p>
-            <p><strong class="text-gray-900">テーブル:</strong> ${order.table_name}</p>
-            <p><strong class="text-gray-900">メニュー:</strong> ${order.item_name}</p>
-            <p><strong class="text-gray-900">価格:</strong> ¥${order.item_price.toLocaleString()}</p>
-            <p><strong class="text-gray-900">ステータス:</strong> <span class="${getOrderStatusClass(order.status)} px-2 py-1 rounded-full text-xs">${getOrderStatusDisplay(order.status)}</span></p>
-            <p><strong class="text-gray-900">注文日時:</strong> ${new Date(order.timestamp).toLocaleString('ja-JP')}</p>
-            <p><strong class="text-gray-900">セッションID:</strong> ${order.session_id}</p>
-        `;
-        document.getElementById('refund-button').dataset.orderId = orderId; // 返金ボタンにIDをセット
-        document.getElementById('detail-modal').classList.remove('hidden');
-    }
-
-    /**
-     * 詳細モーダルを閉じる
-     */
-    function closeDetailModal() {
-        document.getElementById('detail-modal').classList.add('hidden');
-    }
-
-    /**
-     * 注文履歴をクリアします。
-     * @param {number} orderId - クリアする注文のID
-     */
-    async function clearOrderHistory(orderId) {
-        closeConfirmDialog(); // 確認ダイアログを閉じる
-        try {
-            // このAPIはテーブル全体の履歴をクリアする想定です。
-            // 個別の注文をクリアするAPIが必要な場合は、別途実装が必要です。
-            // 例: `/api/order/clear/${orderId}`
-            // 今回は、テーブル管理画面にある`/admin/history/clear/<int:table_id>`を使用するため、
-            // 注文IDからテーブルIDを取得する必要があります。
-            const order = allOrders.find(o => o.id === orderId);
-            if (!order) {
-                showToast('注文データが見つかりません。', 'error');
-                return;
-            }
-            const tableId = order.table_id; // 注文データにtable_idが含まれていると仮定
-
-            const response = await fetch(`/admin/history/clear/${tableId}`, { method: 'POST' });
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const data = await response.json(); // FlaskからのレスポンスがJSONの場合
-            if (data.success) {
-                showToast(`テーブル「${order.table_name}」の注文履歴をクリアしました。`, 'success');
-                setTimeout(() => location.reload(), 500); // ページをリロードして最新データを表示
-            } else {
-                showToast('注文履歴のクリアに失敗しました。', 'error');
-            }
-        } catch (error) {
-            console.error('Error clearing order history:', error);
-            showToast('注文履歴のクリア中にエラーが発生しました。', 'error');
-        }
-    }
-
-    /**
-     * 返金/キャンセル処理を実行します。
-     * @param {number} orderId - 処理する注文のID
-     */
-    async function processRefundCancel(orderId) {
-        closeConfirmDialog(); // 確認ダイアログを閉じる
-        try {
-            const response = await fetch('/api/order/update_status', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ order_id: orderId, status: 'cancelled' }) // ステータスをキャンセルに更新
-            });
-            const data = await response.json();
-            if (data.success) {
-                showToast('注文をキャンセルしました。', 'success');
-                closeDetailModal();
-                setTimeout(() => location.reload(), 500); // ページをリロードして最新データを表示
-            } else {
-                showToast('キャンセル処理に失敗しました。', 'error');
-            }
-        } catch (error) {
-            console.error('Error processing refund/cancel:', error);
-            showToast('キャンセル処理中にエラーが発生しました。', 'error');
-        }
-    }
-
-    /**
-     * CSVエクスポート機能
-     */
-    function exportCsv() {
-        let csvContent = "注文ID,テーブル,メニュー,価格,ステータス,注文日時\n";
-        filteredOrders.forEach(order => {
-            const row = [
-                order.id,
-                order.table_name,
-                order.item_name,
-                order.item_price,
-                getOrderStatusDisplay(order.status),
-                new Date(order.timestamp).toLocaleString('ja-JP')
-            ].map(item => `"${String(item).replace(/"/g, '""')}"`).join(','); // ダブルクォートで囲み、内部のダブルクォートをエスケープ
-            csvContent += row + "\n";
-        });
-
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.setAttribute('download', 'order_history.csv');
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        showToast('注文履歴をCSVでエクスポートしました。', 'info');
-    }
-
-    /**
-     * PDFエクスポート機能
-     */
-    function exportPdf() {
-        const { jsPDF } = window.jspdf;
-        const doc = new jsPDF();
-
-        doc.setFont('Inter', 'normal'); // フォント設定（日本語対応フォントが必要）
-
-        const tableColumn = ["注文ID", "テーブル", "メニュー", "価格", "ステータス", "注文日時"];
-        const tableRows = [];
-
-        filteredOrders.forEach(order => {
-            const orderData = [
-                order.id,
-                order.table_name,
-                order.item_name,
-                `¥${order.item_price.toLocaleString()}`,
-                getOrderStatusDisplay(order.status),
-                new Date(order.timestamp).toLocaleString('ja-JP')
-            ];
-            tableRows.push(orderData);
-        });
-
-        doc.autoTable({
-            head: [tableColumn],
-            body: tableRows,
-            startY: 20,
-            styles: {
-                font: 'Inter', // 日本語フォントが埋め込まれていないと文字化けする可能性あり
-                fontSize: 8,
-                cellPadding: 3,
-                valign: 'middle',
-                halign: 'left'
-            },
-            headStyles: {
-                fillColor: [102, 126, 234], // primary color
-                textColor: [255, 255, 255],
-                fontStyle: 'bold'
-            },
-            alternateRowStyles: {
-                fillColor: [240, 240, 240]
-            },
-            columnStyles: {
-                0: { cellWidth: 15 },
-                1: { cellWidth: 20 },
-                2: { cellWidth: 40 },
-                3: { cellWidth: 20 },
-                4: { cellWidth: 20 },
-                5: { cellWidth: 45 }
-            }
-        });
-
-        doc.save('order_history.pdf');
-        showToast('注文履歴をPDFでエクスポートしました。', 'info');
-    }
-
-    /**
-     * 確認ダイアログを開く汎用関数
-     * @param {string} message - 表示するメッセージ
-     * @param {function} actionCallback - 確認時に実行するコールバック関数
-     * @param {string} buttonText - 確認ボタンのテキスト (デフォルト: '実行')
-     * @param {string} buttonClass - 確認ボタンのCSSクラス (デフォルト: 'bg-red-600 text-white')
-     */
-    function confirmAction(message, actionCallback, buttonText = '実行', buttonClass = 'bg-red-600 text-white') {
-        document.getElementById('confirm-message').textContent = message;
-        const confirmButton = document.getElementById('confirm-action-button');
-        confirmButton.onclick = actionCallback;
-        confirmButton.textContent = buttonText;
-        confirmButton.className = `${buttonClass} px-5 py-2 rounded-md hover:opacity-90 transition duration-300`;
-        document.getElementById('confirm-dialog').classList.remove('hidden');
-    }
-
-    /**
-     * 確認ダイアログを閉じる
-     */
-    function closeConfirmDialog() {
-        document.getElementById('confirm-dialog').classList.add('hidden');
-    }
-
-    /**
-     * トースト通知を表示します。
-     * @param {string} message - 表示するメッセージ
-     * @param {string} type - 'success', 'error', 'info', 'warning'
-     */
-    function showToast(message, type) {
-        const toastContainer = document.getElementById('toast-container');
-        if (!toastContainer) {
-            console.error('Toast container not found.');
-            return;
-        }
-
-        const toast = document.createElement('div');
-        toast.className = `fixed bottom-4 right-4 p-4 rounded-lg shadow-lg text-white z-50 transition-all duration-300 transform translate-y-full opacity-0`;
-
-        let bgColor;
-        switch (type) {
-            case 'success': bgColor = colors.success; break;
-            case 'error': bgColor = colors.error; break;
-            case 'info': bgColor = colors.primary; break;
-            case 'warning': bgColor = colors.warning; break;
-            default: bgColor = colors.gray; break;
-        }
-        toast.style.backgroundColor = bgColor;
-        toast.textContent = message;
-
-        toastContainer.appendChild(toast);
-
-        // フェードイン
-        setTimeout(() => {
-            toast.classList.remove('translate-y-full', 'opacity-0');
-            toast.classList.add('translate-y-0', 'opacity-100');
-        }, 100);
-
-        // 自動で消える
-        setTimeout(() => {
-            toast.classList.remove('translate-y-0', 'opacity-100');
-            toast.classList.add('translate-y-full', 'opacity-0');
-            toast.addEventListener('transitionend', () => toast.remove());
-        }, 5000);
-    }
 </script>
-
 <style>
-    /* モーダル表示アニメーション */
+    .animate-scale-in {
+        animation: scaleIn 0.3s ease-out forwards;
+    }
     @keyframes scaleIn {
         from { transform: scale(0.9); opacity: 0; }
         to { transform: scale(1); opacity: 1; }
-    }
-    .animate-scale-in {
-        animation: scaleIn 0.3s ease-out forwards;
     }
 </style>
 {% endblock %}

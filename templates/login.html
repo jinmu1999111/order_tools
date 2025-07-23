@@ -374,7 +374,6 @@
 {% block content %}
 <div class="login-container">
     <div class="login-card">
-        <!-- 左側：ブランディング -->
         <div class="login-left">
             <div class="login-left-content">
                 <div class="login-logo">
@@ -414,12 +413,10 @@
             </div>
         </div>
         
-        <!-- 右側：ログインフォーム -->
         <div class="login-right">
             <h2 class="login-form-title">ログイン</h2>
             <p class="login-form-subtitle">管理者アカウントでログインしてください</p>
             
-            <!-- エラー・成功メッセージ -->
             {% with messages = get_flashed_messages(with_categories=true) %}
                 {% if messages %}
                     {% for category, message in messages %}
@@ -431,8 +428,7 @@
                 {% endif %}
             {% endwith %}
             
-            <form method="POST" action="{{ url_for('main.login') }}" id="loginForm">
-                {{ csrf_token() }}
+            <form method="POST" action="{{ url_for('login') }}" id="loginForm">
                 
                 <div class="form-group">
                     <label for="username" class="form-label">
@@ -500,7 +496,7 @@
             </div>
             
             <div class="back-to-home">
-                <a href="{{ url_for('main.index') }}">
+                <a href="{{ url_for('index') }}">
                     <i class="fas fa-arrow-left"></i>
                     ホームに戻る
                 </a>
@@ -544,7 +540,7 @@ document.getElementById('loginForm').addEventListener('submit', function(e) {
 
 // パスワード忘れた場合の処理
 function showForgotPassword() {
-    alert('パスワードリセットについては、システム管理者にお問い合わせください。\n\n連絡先: admin@restaurant-system.com\n電話: 03-1234-5678');
+    alert('パスワードリセットについては、システム管理者にお問い合わせください。');
 }
 
 // アラート表示関数
@@ -567,52 +563,10 @@ function showAlert(message, type) {
     }, 5000);
 }
 
-// キーボードショートカット
-document.addEventListener('keydown', function(e) {
-    // Ctrl+Enter でログイン
-    if (e.ctrlKey && e.key === 'Enter') {
-        document.getElementById('loginForm').submit();
-    }
-    
-    // Escape でフォームクリア
-    if (e.key === 'Escape') {
-        document.getElementById('username').value = '';
-        document.getElementById('password').value = '';
-        document.getElementById('username').focus();
-    }
-});
-
 // ページ読み込み時の初期化
 document.addEventListener('DOMContentLoaded', function() {
     // ユーザー名フィールドにフォーカス
     document.getElementById('username').focus();
-    
-    // 自動入力の検出
-    setTimeout(() => {
-        const username = document.getElementById('username');
-        const password = document.getElementById('password');
-        
-        if (username.value) {
-            username.classList.add('has-value');
-        }
-        if (password.value) {
-            password.classList.add('has-value');
-        }
-    }, 100);
-    
-    // セキュリティ警告（開発環境でない場合）
-    if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-        console.warn('セキュリティ警告: このページは暗号化されていません。本番環境ではHTTPS接続を使用してください。');
-    }
-});
-
-// フォーム入力時のリアルタイムバリデーション
-document.getElementById('username').addEventListener('input', function() {
-    this.classList.toggle('has-value', this.value.length > 0);
-});
-
-document.getElementById('password').addEventListener('input', function() {
-    this.classList.toggle('has-value', this.value.length > 0);
 });
 </script>
 {% endblock %}

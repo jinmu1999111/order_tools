@@ -189,7 +189,6 @@
 {% endblock %}
 
 {% block content %}
-<!-- ヒーローセクション -->
 <div class="hero-section">
     <div class="container">
         <h1 class="hero-title">
@@ -199,41 +198,12 @@
         <p class="hero-subtitle">
             効率的な注文管理とスムーズなオペレーションを実現
         </p>
-        <div class="row justify-content-center mt-4">
-            <div class="col-md-3 col-6 mb-2">
-                <a href="{{ url_for('main.table_menu') }}" class="btn btn-light btn-lg w-100">
-                    <i class="fas fa-qrcode d-block mb-2"></i>
-                    QR注文
-                </a>
-            </div>
-            <div class="col-md-3 col-6 mb-2">
-                <a href="{{ url_for('main.kitchen') }}" class="btn btn-light btn-lg w-100">
-                    <i class="fas fa-fire d-block mb-2"></i>
-                    キッチン
-                </a>
-            </div>
-        </div>
+        <p class="text-white-50">QRコードをスキャンして注文を開始するか、管理者としてログインしてください。</p>
     </div>
 </div>
 
 <div class="container">
-    <!-- 機能カード -->
-    <div class="row mb-5">
-        <div class="col-lg-4 col-md-6 mb-4">
-            <div class="feature-card">
-                <div class="feature-icon">
-                    <i class="fas fa-mobile-alt"></i>
-                </div>
-                <h3 class="feature-title">QRコード注文</h3>
-                <p class="feature-description">
-                    テーブルのQRコードをスキャンして、スマートフォンから簡単に注文できます。
-                </p>
-                <a href="{{ url_for('main.table_menu') }}" class="btn-feature">
-                    注文開始
-                </a>
-            </div>
-        </div>
-        
+    <div class="row mb-5 justify-content-center">
         <div class="col-lg-4 col-md-6 mb-4">
             <div class="feature-card">
                 <div class="feature-icon">
@@ -243,8 +213,8 @@
                 <p class="feature-description">
                     リアルタイムで注文状況を確認し、効率的な調理管理を実現します。
                 </p>
-                <a href="{{ url_for('main.kitchen') }}" class="btn-feature">
-                    キッチン画面
+                <a href="{{ url_for('kitchen') }}" class="btn-feature">
+                    キッチン画面へ
                 </a>
             </div>
         </div>
@@ -258,196 +228,13 @@
                 <p class="feature-description">
                     詳細な売上データと分析レポートで、経営判断をサポートします。
                 </p>
-                {% if current_user.is_authenticated and current_user.is_admin %}
-                <a href="{{ url_for('admin.dashboard') }}" class="btn-feature">
-                    ダッシュボード
+                <a href="{{ url_for('dashboard') }}" class="btn-feature">
+                    ダッシュボードへ
                 </a>
-                {% else %}
-                <a href="{{ url_for('main.login') }}" class="btn-feature">
-                    ログイン
-                </a>
-                {% endif %}
             </div>
         </div>
     </div>
     
-    <!-- 統計情報 -->
-    <div class="stats-section">
-        <div class="container">
-            <div class="row">
-                <div class="col-md-3 col-6">
-                    <div class="stat-card">
-                        <span class="stat-number" id="daily-orders">{{ stats.daily_orders or 0 }}</span>
-                        <div class="stat-label">今日の注文数</div>
-                    </div>
-                </div>
-                <div class="col-md-3 col-6">
-                    <div class="stat-card">
-                        <span class="stat-number" id="active-tables">{{ stats.active_tables or 0 }}</span>
-                        <div class="stat-label">利用中テーブル</div>
-                    </div>
-                </div>
-                <div class="col-md-3 col-6">
-                    <div class="stat-card">
-                        <span class="stat-number" id="pending-orders">{{ stats.pending_orders or 0 }}</span>
-                        <div class="stat-label">調理待ち</div>
-                    </div>
-                </div>
-                <div class="col-md-3 col-6">
-                    <div class="stat-card">
-                        <span class="stat-number">¥{{ "{:,}".format(stats.daily_revenue or 0) }}</span>
-                        <div class="stat-label">今日の売上</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="row">
-        <!-- クイックアクション -->
-        <div class="col-lg-8">
-            <div class="quick-actions">
-                <h4 class="mb-3">
-                    <i class="fas fa-bolt me-2 text-primary"></i>
-                    クイックアクション
-                </h4>
-                
-                <div class="row">
-                    <div class="col-md-6">
-                        <a href="{{ url_for('main.table_menu') }}" class="action-btn">
-                            <div class="action-icon">
-                                <i class="fas fa-qrcode"></i>
-                            </div>
-                            <div>
-                                <strong>新規注文</strong><br>
-                                <small class="text-muted">QRコードで注文開始</small>
-                            </div>
-                        </a>
-                        
-                        <a href="{{ url_for('main.kitchen') }}" class="action-btn">
-                            <div class="action-icon">
-                                <i class="fas fa-fire"></i>
-                            </div>
-                            <div>
-                                <strong>キッチン画面</strong><br>
-                                <small class="text-muted">注文管理・調理状況</small>
-                            </div>
-                        </a>
-                    </div>
-                    
-                    <div class="col-md-6">
-                        {% if current_user.is_authenticated and current_user.is_admin %}
-                        <a href="{{ url_for('admin.dashboard') }}" class="action-btn">
-                            <div class="action-icon">
-                                <i class="fas fa-tachometer-alt"></i>
-                            </div>
-                            <div>
-                                <strong>管理画面</strong><br>
-                                <small class="text-muted">売上・設定管理</small>
-                            </div>
-                        </a>
-                        {% endif %}
-                        
-                        <a href="#" class="action-btn" onclick="refreshStats()">
-                            <div class="action-icon">
-                                <i class="fas fa-sync-alt"></i>
-                            </div>
-                            <div>
-                                <strong>データ更新</strong><br>
-                                <small class="text-muted">最新情報を取得</small>
-                            </div>
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- お知らせ -->
-        <div class="col-lg-4">
-            <div class="news-section">
-                <h4 class="mb-3">
-                    <i class="fas fa-bell me-2 text-info"></i>
-                    お知らせ
-                </h4>
-                
-                {% if news and news|length > 0 %}
-                    {% for item in news[:3] %}
-                    <div class="news-item">
-                        <div class="news-date">{{ item.date.strftime('%Y年%m月%d日') }}</div>
-                        <div class="news-title">{{ item.title }}</div>
-                        <div class="news-content">{{ item.content[:100] }}{% if item.content|length > 100 %}...{% endif %}</div>
-                    </div>
-                    {% endfor %}
-                {% else %}
-                <div class="news-item">
-                    <div class="news-date">{{ current_date }}</div>
-                    <div class="news-title">システム稼働中</div>
-                    <div class="news-content">注文管理システムが正常に稼働しています。</div>
-                </div>
-                {% endif %}
-            </div>
-        </div>
-    </div>
 </div>
 
-<!-- リアルタイム更新用JavaScript -->
-<script>
-// 統計情報の自動更新
-function refreshStats() {
-    fetch('/api/stats')
-        .then(response => response.json())
-        .then(data => {
-            document.getElementById('daily-orders').textContent = data.daily_orders || 0;
-            document.getElementById('active-tables').textContent = data.active_tables || 0;
-            document.getElementById('pending-orders').textContent = data.pending_orders || 0;
-            
-            // 成功メッセージ表示
-            showAlert('データを更新しました', 'success');
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            showAlert('データの更新に失敗しました', 'error');
-        });
-}
-
-// 5分ごとに自動更新
-setInterval(refreshStats, 300000);
-
-// アラート表示関数
-function showAlert(message, type) {
-    const alertDiv = document.createElement('div');
-    alertDiv.className = `alert alert-${type === 'success' ? 'success' : 'danger'} alert-dismissible fade show position-fixed`;
-    alertDiv.style.top = '20px';
-    alertDiv.style.right = '20px';
-    alertDiv.style.zIndex = '9999';
-    alertDiv.style.minWidth = '300px';
-    
-    alertDiv.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    
-    document.body.appendChild(alertDiv);
-    
-    // 3秒後に自動削除
-    setTimeout(() => {
-        if (alertDiv.parentNode) {
-            alertDiv.parentNode.removeChild(alertDiv);
-        }
-    }, 3000);
-}
-
-// ページ読み込み時の初期化
-document.addEventListener('DOMContentLoaded', function() {
-    // 統計情報を初回読み込み
-    refreshStats();
-    
-    // サービスワーカーの登録（オフライン対応）
-    if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/static/sw.js')
-            .then(registration => console.log('SW registered'))
-            .catch(error => console.log('SW registration failed'));
-    }
-});
-</script>
 {% endblock %}

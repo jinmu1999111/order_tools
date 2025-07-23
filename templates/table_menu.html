@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 
-{% block title %}メニュー注文 - テーブル{{ table.number }}{% endblock %}
+{% block title %}メニュー注文 - テーブル{{ table.name }}{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -66,12 +66,7 @@
         display: flex;
         align-items: center;
     }
-    
-    .section-icon {
-        margin-right: 0.5rem;
-        color: #ff6b6b;
-    }
-    
+        
     .menu-item {
         background: white;
         border-radius: 15px;
@@ -108,42 +103,6 @@
         white-space: nowrap;
     }
     
-    .item-description {
-        color: #666;
-        line-height: 1.5;
-        margin-bottom: 1rem;
-    }
-    
-    .item-badges {
-        margin-bottom: 1rem;
-    }
-    
-    .badge {
-        margin-right: 0.5rem;
-        padding: 0.4rem 0.8rem;
-        font-size: 0.8rem;
-    }
-    
-    .badge-spicy {
-        background-color: #ff4757;
-        color: white;
-    }
-    
-    .badge-vegetarian {
-        background-color: #2ed573;
-        color: white;
-    }
-    
-    .badge-popular {
-        background-color: #ffa502;
-        color: white;
-    }
-    
-    .badge-new {
-        background-color: #3742fa;
-        color: white;
-    }
-    
     .quantity-controls {
         display: flex;
         align-items: center;
@@ -175,13 +134,7 @@
         background: #ff5252;
         transform: scale(1.1);
     }
-    
-    .qty-btn:disabled {
-        background: #ccc;
-        cursor: not-allowed;
-        transform: none;
-    }
-    
+        
     .qty-display {
         min-width: 60px;
         text-align: center;
@@ -217,7 +170,8 @@
         box-shadow: -5px 0 15px rgba(0,0,0,0.1);
         transition: right 0.3s ease;
         z-index: 1000;
-        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
     }
     
     .cart-sidebar.active {
@@ -228,13 +182,12 @@
         background: #ff6b6b;
         color: white;
         padding: 1.5rem;
-        position: sticky;
-        top: 0;
-        z-index: 10;
     }
     
     .cart-content {
         padding: 1.5rem;
+        flex-grow: 1;
+        overflow-y: auto;
     }
     
     .cart-item {
@@ -262,10 +215,8 @@
     .cart-total {
         background: #f8f9fa;
         padding: 1.5rem;
-        margin-top: 1rem;
         border-radius: 10px;
-        position: sticky;
-        bottom: 0;
+        border-top: 1px solid #ddd;
     }
     
     .floating-cart-btn {
@@ -373,12 +324,7 @@
             font-size: 0.9rem;
         }
     }
-    
-    .loading {
-        opacity: 0.6;
-        pointer-events: none;
-    }
-    
+        
     .success-message {
         position: fixed;
         top: 50%;
@@ -396,14 +342,13 @@
 {% endblock %}
 
 {% block content %}
-<!-- メニューヘッダー -->
 <div class="menu-header">
     <div class="container">
         <div class="row align-items-center">
             <div class="col-md-8">
                 <h1>
                     <i class="fas fa-utensils me-3"></i>
-                    レストランメニュー
+                    メニュー
                 </h1>
                 <p class="mb-0">お好きな料理をお選びください</p>
             </div>
@@ -411,9 +356,8 @@
                 <div class="table-info">
                     <h3 class="mb-1">
                         <i class="fas fa-chair me-2"></i>
-                        テーブル {{ table.number }}
+                        テーブル {{ table.name }}
                     </h3>
-                    <p class="mb-0">{{ table.seats }}名様席</p>
                 </div>
             </div>
         </div>
@@ -421,74 +365,31 @@
 </div>
 
 <div class="container">
-    <!-- カテゴリナビゲーション -->
     <div class="category-nav">
         <div class="text-center">
-            <a href="#appetizers" class="category-btn" data-category="appetizers">
-                <i class="fas fa-seedling me-2"></i>前菜
+            {% for category, items in categorized_menu.items() %}
+            <a href="#category-{{ category | replace(' ', '-') }}" class="category-btn" data-category="{{ category }}">
+                {{ category }}
             </a>
-            <a href="#main-dishes" class="category-btn" data-category="main-dishes">
-                <i class="fas fa-hamburger me-2"></i>メイン
-            </a>
-            <a href="#pasta" class="category-btn" data-category="pasta">
-                <i class="fas fa-wine-bottle me-2"></i>パスタ
-            </a>
-            <a href="#pizza" class="category-btn" data-category="pizza">
-                <i class="fas fa-pizza-slice me-2"></i>ピザ
-            </a>
-            <a href="#desserts" class="category-btn" data-category="desserts">
-                <i class="fas fa-ice-cream me-2"></i>デザート
-            </a>
-            <a href="#drinks" class="category-btn" data-category="drinks">
-                <i class="fas fa-glass-cheers me-2"></i>ドリンク
-            </a>
+            {% endfor %}
         </div>
     </div>
     
-    <!-- メニューセクション -->
-    {% for category in menu_categories %}
-    <div id="{{ category.slug }}" class="menu-section">
+    {% for category, items in categorized_menu.items() %}
+    <div id="category-{{ category | replace(' ', '-') }}" class="menu-section">
         <h2 class="section-title">
-            <i class="{{ category.icon }} section-icon"></i>
-            {{ category.name }}
+            {{ category }}
         </h2>
         
         <div class="row">
-            {% for item in category.items %}
+            {% for item in items %}
             <div class="col-lg-6 col-xl-4">
-                <div class="menu-item" data-item-id="{{ item.id }}">
+                <div class="menu-item" data-item-id="{{ item.id }}" data-item-name="{{ item.name }}" data-item-price="{{ item.price }}">
                     <div class="menu-item-header">
                         <div class="flex-grow-1">
                             <div class="item-name">{{ item.name }}</div>
                             <div class="item-price">¥{{ "{:,}".format(item.price) }}</div>
                         </div>
-                    </div>
-                    
-                    <div class="item-description">
-                        {{ item.description }}
-                    </div>
-                    
-                    <div class="item-badges">
-                        {% if item.is_spicy %}
-                        <span class="badge badge-spicy">
-                            <i class="fas fa-fire me-1"></i>辛口
-                        </span>
-                        {% endif %}
-                        {% if item.is_vegetarian %}
-                        <span class="badge badge-vegetarian">
-                            <i class="fas fa-leaf me-1"></i>ベジタリアン
-                        </span>
-                        {% endif %}
-                        {% if item.is_popular %}
-                        <span class="badge badge-popular">
-                            <i class="fas fa-star me-1"></i>人気
-                        </span>
-                        {% endif %}
-                        {% if item.is_new %}
-                        <span class="badge badge-new">
-                            <i class="fas fa-plus me-1"></i>新メニュー
-                        </span>
-                        {% endif %}
                     </div>
                     
                     <div class="quantity-controls">
@@ -509,13 +410,11 @@
     {% endfor %}
 </div>
 
-<!-- フローティングカートボタン -->
 <button class="floating-cart-btn" onclick="toggleCart()">
     <i class="fas fa-shopping-cart"></i>
-    <span class="cart-badge" id="cart-count">0</span>
+    <span class="cart-badge" id="cart-count" style="display: none;">0</span>
 </button>
 
-<!-- カートサイドバー -->
 <div class="overlay" id="cart-overlay" onclick="toggleCart()"></div>
 <div class="cart-sidebar" id="cart-sidebar">
     <div class="cart-header">
@@ -530,114 +429,85 @@
         </div>
     </div>
     
-    <div class="cart-content">
-        <div id="cart-items">
-            <div class="text-center text-muted py-4">
-                <i class="fas fa-shopping-cart fa-3x mb-3"></i>
-                <p>カートが空です</p>
-            </div>
+    <div class="cart-content" id="cart-items">
+        <div class="text-center text-muted py-4">
+            <i class="fas fa-shopping-cart fa-3x mb-3"></i>
+            <p>カートが空です</p>
+        </div>
+    </div>
+    
+    <div class="cart-total" id="cart-total" style="display: none;">
+        <div class="d-flex justify-content-between mb-2">
+            <span>合計:</span>
+            <span id="total">¥0</span>
         </div>
         
-        <div class="cart-total" id="cart-total" style="display: none;">
-            <div class="d-flex justify-content-between mb-2">
-                <span>小計:</span>
-                <span id="subtotal">¥0</span>
-            </div>
-            <div class="d-flex justify-content-between mb-2">
-                <span>税込:</span>
-                <span id="total">¥0</span>
-            </div>
-            
-            <button class="order-btn" onclick="submitOrder()" id="submit-order-btn" disabled>
-                <i class="fas fa-paper-plane me-2"></i>
-                注文を確定する
-            </button>
-        </div>
+        <button class="order-btn" onclick="submitOrder()" id="submit-order-btn" disabled>
+            <i class="fas fa-paper-plane me-2"></i>
+            注文を確定する
+        </button>
     </div>
 </div>
 
 <script>
 // カートデータ
 let cart = {};
-let tableId = {{ table.id }};
+const tableId = {{ table.id }};
 
 // 数量変更
 function changeQuantity(itemId, change) {
     const qtyElement = document.getElementById(`qty-${itemId}`);
     let currentQty = parseInt(qtyElement.textContent);
     let newQty = Math.max(0, currentQty + change);
-    
     qtyElement.textContent = newQty;
-    
-    // カートの更新
-    if (newQty > 0) {
-        updateCartItem(itemId, newQty);
-    } else {
-        removeFromCart(itemId);
-    }
 }
 
 // カートに追加
 function addToCart(itemId) {
-    const qty = parseInt(document.getElementById(`qty-${itemId}`).textContent);
-    if (qty > 0) {
-        updateCartItem(itemId, qty);
-        
-        // 成功フィードバック
-        showSuccess('カートに追加しました');
-    }
-}
-
-// カートアイテム更新
-function updateCartItem(itemId, quantity) {
-    const menuItem = document.querySelector(`[data-item-id="${itemId}"]`);
-    const name = menuItem.querySelector('.item-name').textContent;
-    const price = parseInt(menuItem.querySelector('.item-price').textContent.replace(/[¥,]/g, ''));
+    const qtyElement = document.getElementById(`qty-${itemId}`);
+    const quantity = parseInt(qtyElement.textContent);
     
-    if (quantity > 0) {
-        cart[itemId] = {
-            name: name,
-            price: price,
-            quantity: quantity
-        };
+    if (quantity <= 0) {
+        showError("数量を1以上にしてください。");
+        return;
+    }
+    
+    const menuItemEl = document.querySelector(`[data-item-id="${itemId}"]`);
+    const name = menuItemEl.dataset.itemName;
+    const price = parseInt(menuItemEl.dataset.itemPrice);
+
+    if (cart[itemId]) {
+        cart[itemId].quantity += quantity;
     } else {
-        delete cart[itemId];
+        cart[itemId] = { name, price, quantity };
     }
     
+    qtyElement.textContent = '0'; // リセット
     updateCartDisplay();
-}
-
-// カートから削除
-function removeFromCart(itemId) {
-    delete cart[itemId];
-    document.getElementById(`qty-${itemId}`).textContent = '0';
-    updateCartDisplay();
+    showSuccess(`${name} をカートに追加しました`);
 }
 
 // カート表示更新
 function updateCartDisplay() {
-    const cartItems = document.getElementById('cart-items');
-    const cartTotal = document.getElementById('cart-total');
-    const cartCount = document.getElementById('cart-count');
+    const cartItemsEl = document.getElementById('cart-items');
+    const cartTotalEl = document.getElementById('cart-total');
+    const cartCountEl = document.getElementById('cart-count');
     const submitBtn = document.getElementById('submit-order-btn');
     
     let totalItems = 0;
-    let subtotal = 0;
+    let totalPrice = 0;
     let html = '';
     
-    if (Object.keys(cart).length === 0) {
-        html = `
-            <div class="text-center text-muted py-4">
-                <i class="fas fa-shopping-cart fa-3x mb-3"></i>
-                <p>カートが空です</p>
-            </div>
-        `;
-        cartTotal.style.display = 'none';
+    const cartEntries = Object.entries(cart);
+
+    if (cartEntries.length === 0) {
+        html = `<div class="text-center text-muted py-4"><i class="fas fa-shopping-cart fa-3x mb-3"></i><p>カートが空です</p></div>`;
+        cartTotalEl.style.display = 'none';
         submitBtn.disabled = true;
     } else {
-        for (const [itemId, item] of Object.entries(cart)) {
+        for (const [itemId, item] of cartEntries) {
             totalItems += item.quantity;
-            subtotal += item.price * item.quantity;
+            totalPrice += item.price * item.quantity;
             
             html += `
                 <div class="cart-item">
@@ -646,9 +516,7 @@ function updateCartDisplay() {
                         <div class="cart-item-price">¥${item.price.toLocaleString()} × ${item.quantity}</div>
                     </div>
                     <div class="cart-item-controls">
-                        <button class="btn btn-sm btn-outline-secondary me-2" onclick="changeQuantity('${itemId}', -1)">-</button>
-                        <button class="btn btn-sm btn-outline-secondary me-2" onclick="changeQuantity('${itemId}', 1)">+</button>
-                        <button class="btn btn-sm btn-outline-danger" onclick="removeFromCart('${itemId}')">
+                        <button class="btn btn-sm btn-outline-danger" onclick="removeCartItem('${itemId}')">
                             <i class="fas fa-trash"></i>
                         </button>
                     </div>
@@ -656,32 +524,29 @@ function updateCartDisplay() {
             `;
         }
         
-        cartTotal.style.display = 'block';
+        cartTotalEl.style.display = 'block';
         submitBtn.disabled = false;
+        document.getElementById('total').textContent = `¥${totalPrice.toLocaleString()}`;
     }
     
-    cartItems.innerHTML = html;
-    cartCount.textContent = totalItems;
-    cartCount.style.display = totalItems > 0 ? 'flex' : 'none';
-    
-    const tax = Math.floor(subtotal * 0.1);
-    const total = subtotal + tax;
-    
-    document.getElementById('subtotal').textContent = `¥${subtotal.toLocaleString()}`;
-    document.getElementById('total').textContent = `¥${total.toLocaleString()}`;
+    cartItemsEl.innerHTML = html;
+    cartCountEl.textContent = totalItems;
+    cartCountEl.style.display = totalItems > 0 ? 'flex' : 'none';
+}
+
+function removeCartItem(itemId) {
+    delete cart[itemId];
+    updateCartDisplay();
 }
 
 // カート表示切り替え
 function toggleCart() {
-    const sidebar = document.getElementById('cart-sidebar');
-    const overlay = document.getElementById('cart-overlay');
-    
-    sidebar.classList.toggle('active');
-    overlay.classList.toggle('active');
+    document.getElementById('cart-sidebar').classList.toggle('active');
+    document.getElementById('cart-overlay').classList.toggle('active');
 }
 
 // 注文送信
-function submitOrder() {
+async function submitOrder() {
     if (Object.keys(cart).length === 0) {
         showError('カートが空です');
         return;
@@ -691,118 +556,46 @@ function submitOrder() {
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>注文中...';
     
-    fetch('/api/orders', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            table_id: tableId,
-            items: cart
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
+    try {
+        const response = await fetch('/api/order/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                table_id: tableId,
+                items: cart
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
             cart = {};
             updateCartDisplay();
             toggleCart();
-            showSuccess('注文を受け付けました！調理開始まで少々お待ちください。');
-            
-            // 全ての数量をリセット
-            document.querySelectorAll('.qty-display').forEach(el => {
-                el.textContent = '0';
-            });
-            
+            showSuccess('注文を受け付けました！');
         } else {
             showError(data.message || '注文の送信に失敗しました');
         }
-    })
-    .catch(error => {
+    } catch (error) {
         console.error('Error:', error);
-        showError('注文の送信に失敗しました');
-    })
-    .finally(() => {
+        showError('注文の送信中にネットワークエラーが発生しました');
+    } finally {
         submitBtn.disabled = false;
         submitBtn.innerHTML = '<i class="fas fa-paper-plane me-2"></i>注文を確定する';
-    });
-}
-
-// スムーズスクロール
-document.querySelectorAll('.category-btn').forEach(btn => {
-    btn.addEventListener('click', function(e) {
-        e.preventDefault();
-        const targetId = this.getAttribute('href').substring(1);
-        const targetElement = document.getElementById(targetId);
-        
-        if (targetElement) {
-            const offset = 150; // ナビゲーションの高さ分
-            const elementPosition = targetElement.offsetTop;
-            const offsetPosition = elementPosition - offset;
-            
-            window.scrollTo({
-                top: offsetPosition,
-                behavior: 'smooth'
-            });
-        }
-        
-        // アクティブクラスの切り替え
-        document.querySelectorAll('.category-btn').forEach(b => b.classList.remove('active'));
-        this.classList.add('active');
-    });
-});
-
-// 成功メッセージ表示
-function showSuccess(message) {
-    const successDiv = document.createElement('div');
-    successDiv.className = 'success-message';
-    successDiv.innerHTML = `
-        <i class="fas fa-check-circle fa-3x mb-3"></i>
-        <h4>${message}</h4>
-    `;
-    
-    document.body.appendChild(successDiv);
-    
-    setTimeout(() => {
-        if (successDiv.parentNode) {
-            successDiv.parentNode.removeChild(successDiv);
-        }
-    }, 3000);
-}
-
-// エラーメッセージ表示
-function showError(message) {
-    alert(message); // 簡易実装、本番では Toast 等を使用
-}
-
-// ページ読み込み時の初期化
-document.addEventListener('DOMContentLoaded', function() {
-    // 最初のカテゴリをアクティブにする
-    const firstCategory = document.querySelector('.category-btn');
-    if (firstCategory) {
-        firstCategory.classList.add('active');
     }
-    
-    // スクロール時のカテゴリハイライト
-    window.addEventListener('scroll', function() {
-        const sections = document.querySelectorAll('.menu-section');
-        const navButtons = document.querySelectorAll('.category-btn');
-        
-        let current = '';
-        sections.forEach(section => {
-            const sectionTop = section.offsetTop - 200;
-            if (pageYOffset >= sectionTop) {
-                current = section.getAttribute('id');
-            }
-        });
-        
-        navButtons.forEach(btn => {
-            btn.classList.remove('active');
-            if (btn.getAttribute('href') === '#' + current) {
-                btn.classList.add('active');
-            }
-        });
-    });
-});
+}
+
+// メッセージ表示
+function showSuccess(message) {
+    const el = document.createElement('div');
+    el.className = 'success-message';
+    el.innerHTML = `<i class="fas fa-check-circle fa-3x mb-3"></i><h4>${message}</h4>`;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 3000);
+}
+
+function showError(message) {
+    alert(`エラー: ${message}`); // 本番ではより良いUIを検討
+}
 </script>
 {% endblock %}
