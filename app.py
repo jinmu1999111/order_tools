@@ -511,9 +511,8 @@ def api_sales_reset():
 @login_required
 def api_kitchen_status():
     # pending または preparing の注文があるかを確認
-    is_cooking = db.session.query(
-        Order.query.filter(Order.status.in_(['pending', 'preparing'])).exists()
-    ).scalar()
+    q = Order.query.filter(Order.status.in_(['pending', 'preparing']))
+    is_cooking = db.session.query(q.exists()).scalar()
     return jsonify({'cooking_active': is_cooking})
 
 # --- データベース初期化コマンド ---
