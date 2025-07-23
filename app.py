@@ -195,7 +195,8 @@ def admin_tables():
 @app.route('/admin/history')
 @login_required
 def admin_history():
-    return render_template('admin_history.html', tables=Table.query.order_by(Table.name).all())
+    tables = Table.query.order_by(Table.name).all()
+    return render_template('admin_history.html', tables=tables)
 
 @app.route('/admin/guidance')
 @login_required
