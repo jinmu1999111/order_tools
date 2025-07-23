@@ -21,4 +21,4 @@ services:
 
 databases:
   - name: order_tools_db
-    plan: starter # Starter plan for testing. Consider 'standard' for production.
+    plan: eco # 'starter'から'eco'に変更しました。
