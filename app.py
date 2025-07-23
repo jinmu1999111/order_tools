@@ -12,6 +12,8 @@ import pytz
 # --- アプリケーションとデータベースの初期設定 ---
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', os.urandom(24))
+
+# RenderのDATABASE_URL形式に対応しつつ、ローカルでのテストも考慮
 db_url = os.environ.get('DATABASE_URL', 'sqlite:///instance/test.db')
 if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
@@ -19,9 +21,10 @@ app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(hours=8)
 
-# instanceフォルダがなければ作成
-instance_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance')
-os.makedirs(instance_path, exist_ok=True)
+# ローカルでSQLiteを使用する場合のinstanceフォルダ作成
+if 'sqlite' in app.config['SQLALCHEMY_DATABASE_URI']:
+    instance_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance')
+    os.makedirs(instance_path, exist_ok=True)
 
 db = SQLAlchemy(app)
 JST = pytz.timezone('Asia/Tokyo')
@@ -89,7 +92,8 @@ def require_qr_token(f):
             token = QRToken.query.filter_by(token=session['qr_token']).first()
             if token and token.is_valid():
                 return f(*args, **kwargs)
-        if current_user.is_authenticated: return f(*args, **kwargs)
+        if current_user.is_authenticated:
+             return f(*args, **kwargs)
         flash('このページにアクセスするにはQRコードのスキャンが必要です。', 'warning')
         return redirect(url_for('index'))
     return decorated_function
@@ -214,7 +218,7 @@ def submit_order():
     table = db.session.get(Table, data.get('table_id'))
     if not table: return jsonify(success=False, message="テーブル情報がありません。"), 400
     for item_id, item_data in data.get('items', {}).items():
-        menu_item = db.session.get(MenuItem, item_id)
+        menu_item = db.session.get(MenuItem, int(item_id))
         if menu_item:
             menu_item.popularity_count += item_data['quantity']
             for _ in range(item_data['quantity']):
@@ -238,18 +242,24 @@ def api_stats_dashboard():
 def api_dashboard_sales():
     period = request.args.get('period', 'daily')
     labels, sales = [], []
+    today = datetime.date.today()
     if period == 'daily':
         for i in range(6, -1, -1):
-            day = datetime.date.today() - datetime.timedelta(days=i)
+            day = today - datetime.timedelta(days=i)
             day_start = datetime.datetime.combine(day, datetime.time.min, tzinfo=JST)
             day_end = datetime.datetime.combine(day, datetime.time.max, tzinfo=JST)
             daily_total = db.session.query(func.sum(Order.item_price)).filter(Order.timestamp.between(day_start, day_end)).scalar() or 0
             labels.append(day.strftime('%m/%d'))
             sales.append(daily_total)
-    else:
+    else: # monthly
         for i in range(5, -1, -1):
-            target_month_start = (datetime.date.today().replace(day=1) - datetime.timedelta(days=i*30)).replace(day=1)
-            next_month_start = (target_month_start + datetime.timedelta(days=32)).replace(day=1)
+            # 月の初日を計算
+            target_month_start_naive = (today.replace(day=1) - datetime.timedelta(days=i*30)).replace(day=1)
+            target_month_start = JST.localize(datetime.datetime.combine(target_month_start_naive, datetime.time.min))
+            # 翌月の初日を計算
+            next_month_start_naive = (target_month_start_naive + datetime.timedelta(days=32)).replace(day=1)
+            next_month_start = JST.localize(datetime.datetime.combine(next_month_start_naive, datetime.time.min))
+            
             monthly_total = db.session.query(func.sum(Order.item_price)).filter(Order.timestamp >= target_month_start, Order.timestamp < next_month_start).scalar() or 0
             labels.append(target_month_start.strftime('%Y/%m'))
             sales.append(monthly_total)
@@ -284,7 +294,7 @@ def api_menu_import():
 @login_required
 def api_save_table_positions():
     for table_data in request.json.get('tables', []):
-        table = db.session.get(Table, table_data['id'])
+        table = db.session.get(Table, int(table_data['id']))
         if table: table.x, table.y = table_data['x'], table_data['y']
     db.session.commit()
     return jsonify(success=True)
@@ -322,6 +332,7 @@ def delete_table(table_id):
 # --- データベース初期化コマンド ---
 @app.cli.command("init-db")
 def init_db_command():
+    """データベースをクリアし、初期データを投入します。"""
     db.drop_all()
     db.create_all()
     admin_user = User(username='admin', is_admin=True)
@@ -344,4 +355,5 @@ if __name__ == '__main__':
             admin_user.set_password('password123')
             db.session.add(admin_user)
             db.session.commit()
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)
+            print("Default admin user created.")
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)
