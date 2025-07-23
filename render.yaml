@@ -7,7 +7,7 @@ services:
     env: python
     buildCommand: "pip install -r requirements.txt"
     startCommand: "gunicorn app:app" # Ensure app:app matches your Flask app object name
-    plan: starter # You can choose 'starter', 'standard', etc. based on your needs
+    plan: starter # こちらはWebサービス自体のプランです。必要に応じて変更してください。
     envVars:
       - key: DATABASE_URL # PostgreSQL database URL will be injected by Render
         fromDatabase:
@@ -21,4 +21,4 @@ services:
 
 databases:
   - name: order_tools_db
-    plan: eco # 'starter'から'eco'に変更しました。
+    plan: free # 'eco'から'free'に変更しました。無料プランですが30日の有効期限があります。
