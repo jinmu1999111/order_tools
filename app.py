@@ -10,6 +10,7 @@ from sqlalchemy import func, desc, and_
 import pytz
 from collections import defaultdict
 from math import ceil
+from flask_migrate import Migrate # この行を追加しました
 
 # --- アプリケーションとデータベースの初期設定 ---
 app = Flask(__name__)
@@ -23,6 +24,7 @@ app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(hours=8)
 instance_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance')
 os.makedirs(instance_path, exist_ok=True)
 db = SQLAlchemy(app)
+migrate = Migrate(app, db) # この行を追加しました
 JST = pytz.timezone('Asia/Tokyo')
 
 # --- ログイン機能の設定 ---
