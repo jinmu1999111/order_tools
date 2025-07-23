@@ -3,334 +3,181 @@
 {% block title %}ダッシュボード{% endblock %}
 
 {% block content %}
-<div class="container mx-auto p-4">
-    <h1 class="text-3xl font-bold text-gray-800 mb-6">📊 管理ダッシュボード</h1>
-
-    <!-- リアルタイム統計データ -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div class="bg-white rounded-lg shadow-md p-6 animate-fade-in">
-            <h2 class="text-lg font-semibold text-gray-700 mb-2">今日の売上</h2>
-            <p class="text-4xl font-bold text-primary" id="today-sales">¥0</p>
-            <p class="text-sm text-gray-500">前日比: <span id="sales-change" class="text-green-500">--</span></p>
-        </div>
-        <div class="bg-white rounded-lg shadow-md p-6 animate-fade-in delay-100">
-            <h2 class="text-lg font-semibold text-gray-700 mb-2">今日の注文数</h2>
-            <p class="text-4xl font-bold text-secondary" id="order-count">0</p>
-            <p class="text-sm text-gray-500">前日比: <span id="order-change" class="text-red-500">--</span></p>
-        </div>
-        <div class="bg-white rounded-lg shadow-md p-6 animate-fade-in delay-200">
-            <h2 class="text-lg font-semibold text-gray-700 mb-2">テーブル稼働中</h2>
-            <p class="text-4xl font-bold text-green-500" id="occupied-tables">0</p>
-            <p class="text-sm text-gray-500">全テーブル数: <span id="total-tables">0</span></p>
-        </div>
-        <div class="bg-white rounded-lg shadow-md p-6 animate-fade-in delay-300">
-            <h2 class="text-lg font-semibold text-gray-700 mb-2">平均客単価</h2>
-            <p class="text-4xl font-bold text-blue-500" id="avg-spend">¥0</p>
-            <p class="text-sm text-gray-500">過去7日間平均: <span id="avg-spend-7day">--</span></p>
-        </div>
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mb-0" style="font-size: 2.5rem;">📊 管理ダッシュボード</h1>
+        <button class="btn btn-danger" id="reset-sales-btn">
+            <i class="bi bi-trash"></i> 売上リセット
+        </button>
     </div>
 
-    <!-- グラフとランキング -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        <div class="lg:col-span-2 bg-white rounded-lg shadow-md p-6 animate-fade-in">
-            <h2 class="text-lg font-semibold text-gray-700 mb-4">売上トレンド (日別・月別)</h2>
-            <div class="flex justify-end mb-4">
-                <button id="sales-chart-daily" class="bg-primary text-white px-4 py-2 rounded-md hover:bg-primary-dark transition duration-300 mr-2">日別</button>
-                <button id="sales-chart-monthly" class="bg-gray-200 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-300 transition duration-300">月別</button>
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">今日の売上</h5>
+                    <p class="card-text fs-2 fw-bold text-primary" id="today-sales">¥0</p>
+                </div>
             </div>
-            <canvas id="salesChart" class="w-full h-80"></canvas>
         </div>
-        <div class="bg-white rounded-lg shadow-md p-6 animate-fade-in delay-400">
-            <h2 class="text-lg font-semibold text-gray-700 mb-4">人気メニューランキング</h2>
-            <ul id="popular-items-list" class="divide-y divide-gray-200">
-                <!-- 人気メニューはJSで動的に追加 -->
-            </ul>
+        <div class="col-md-3 mb-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">今日の注文件数</h5>
+                    <p class="card-text fs-2 fw-bold text-success" id="order-count">0</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">平均客単価</h5>
+                    <p class="card-text fs-2 fw-bold text-info" id="avg-spend">¥0</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title text-muted">テーブル稼働状況</h5>
+                    <p class="card-text fs-2 fw-bold text-warning">
+                        <span id="occupied-tables">0</span> / <span id="total-tables">0</span>
+                    </p>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- 最近の注文一覧 -->
-    <div class="bg-white rounded-lg shadow-md p-6 animate-fade-in delay-500">
-        <h2 class="text-lg font-semibold text-gray-700 mb-4">最近の注文</h2>
-        <div class="overflow-x-auto">
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            注文ID
-                        </th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            テーブル
-                        </th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            メニュー
-                        </th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            価格
-                        </th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            ステータス
-                        </th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            時間
-                        </th>
-                    </tr>
-                </thead>
-                <tbody id="recent-orders-list" class="bg-white divide-y divide-gray-200">
-                    <!-- 最近の注文はJSで動的に追加 -->
-                </tbody>
-            </table>
+    <div class="row">
+        <div class="col-lg-8 mb-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">売上トレンド</h5>
+                    <div style="height: 300px;">
+                        <canvas id="salesChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4 mb-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h5 class="card-title">人気メニューランキング</h5>
+                    <ul class="list-group list-group-flush" id="popular-items-list">
+                        </ul>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-    // カラーパレットの定義
-    const colors = {
-        primary: '#667eea',
-        secondary: '#ff6b6b',
-        success: '#2ed573',
-        warning: '#ffa502',
-        error: '#ff4757',
-        gray: '#e2e8f0'
-    };
+    let salesChartInstance;
 
-    let salesChart; // Chart.jsインスタンスを保持する変数
-
-    document.addEventListener('DOMContentLoaded', function() {
-        // 初期データのフェッチと表示
-        fetchDashboardData();
-        fetchSalesData('daily'); // 初期表示は日別売上
-
-        // 自動データ更新 (例: 30秒ごと)
-        setInterval(fetchDashboardData, 30000);
-        // 売上グラフの切り替えボタンイベントリスナー
-        document.getElementById('sales-chart-daily').addEventListener('click', () => {
-            fetchSalesData('daily');
-            document.getElementById('sales-chart-daily').classList.add('bg-primary', 'text-white');
-            document.getElementById('sales-chart-daily').classList.remove('bg-gray-200', 'text-gray-700');
-            document.getElementById('sales-chart-monthly').classList.remove('bg-primary', 'text-white');
-            document.getElementById('sales-chart-monthly').classList.add('bg-gray-200', 'text-gray-700');
-        });
-        document.getElementById('sales-chart-monthly').addEventListener('click', () => {
-            fetchSalesData('monthly');
-            document.getElementById('sales-chart-monthly').classList.add('bg-primary', 'text-white');
-            document.getElementById('sales-chart-monthly').classList.remove('bg-gray-200', 'text-gray-700');
-            document.getElementById('sales-chart-daily').classList.remove('bg-primary', 'text-white');
-            document.getElementById('sales-chart-daily').classList.add('bg-gray-200', 'text-gray-700');
-        });
-    });
-
-    /**
-     * ダッシュボードの主要統計データをAPIからフェッチし、表示を更新します。
-     */
     async function fetchDashboardData() {
         try {
-            const response = await fetch('/api/stats/dashboard');
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
+            const response = await fetch('/api/dashboard/summary');
+            if (!response.ok) throw new Error('サマリーデータの取得に失敗');
             const data = await response.json();
-            console.log("Dashboard Data:", data);
 
-            // 統計データの更新
-            document.getElementById('today-sales').textContent = `¥${data.today_sales.toLocaleString()}`;
-            document.getElementById('order-count').textContent = data.order_count.toLocaleString();
-
-            const totalTables = Object.values(data.table_stats).reduce((sum, count) => sum + count, 0);
-            document.getElementById('occupied-tables').textContent = data.table_stats.occupied || 0;
-            document.getElementById('total-tables').textContent = totalTables;
-
-            // 平均客単価は、今日の売上と注文数から簡易的に算出
-            const avgSpend = data.order_count > 0 ? data.today_sales / data.order_count : 0;
-            document.getElementById('avg-spend').textContent = `¥${Math.round(avgSpend).toLocaleString()}`;
-
-            // 人気メニューランキングの更新
-            const popularItemsList = document.getElementById('popular-items-list');
-            popularItemsList.innerHTML = ''; // クリア
-            if (data.popular_items && data.popular_items.length > 0) {
-                data.popular_items.forEach((item, index) => {
-                    const listItem = document.createElement('li');
-                    listItem.className = 'py-3 flex items-center justify-between';
-                    listItem.innerHTML = `
-                        <span class="text-gray-900">${index + 1}. ${item.name}</span>
-                        <span class="text-gray-600">${item.count} 回</span>
-                    `;
-                    popularItemsList.appendChild(listItem);
+            document.getElementById('today-sales').textContent = data.today_sales;
+            document.getElementById('order-count').textContent = data.today_orders;
+            document.getElementById('avg-spend').textContent = data.avg_spend;
+            document.getElementById('occupied-tables').textContent = data.occupied_tables;
+            document.getElementById('total-tables').textContent = data.total_tables;
+            
+            const popularList = document.getElementById('popular-items-list');
+            popularList.innerHTML = '';
+            if (data.popular_items.length > 0) {
+                data.popular_items.forEach(item => {
+                    const li = document.createElement('li');
+                    li.className = 'list-group-item d-flex justify-content-between align-items-center';
+                    li.textContent = item.name;
+                    li.innerHTML += `<span class="badge bg-primary rounded-pill">${item.count}</span>`;
+                    popularList.appendChild(li);
                 });
             } else {
-                popularItemsList.innerHTML = '<li class="text-gray-500 py-3">データがありません。</li>';
+                popularList.innerHTML = '<li class="list-group-item text-muted">データがありません。</li>';
             }
-
-            // 最近の注文一覧の更新 (APIエンドポイントが未定義のため、仮のデータまたは空)
-            // 実際には /api/dashboard/recent-orders のようなAPIから取得
-            const recentOrdersList = document.getElementById('recent-orders-list');
-            recentOrdersList.innerHTML = ''; // クリア
-
-            // 仮のデータまたはAPIからのデータでテーブルを更新
-            // if (data.recent_orders && data.recent_orders.length > 0) {
-            //     data.recent_orders.forEach(order => {
-            //         const row = document.createElement('tr');
-            //         row.className = 'hover:bg-gray-100 transition duration-150';
-            //         row.innerHTML = `
-            //             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${order.id}</td>
-            //             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.table_name}</td>
-            //             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.item_name}</td>
-            //             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">¥${order.item_price.toLocaleString()}</td>
-            //             <td class="px-6 py-4 whitespace-nowrap text-sm">
-            //                 <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getOrderStatusClass(order.status)}">
-            //                     ${order.status_display}
-            //                 </span>
-            //             </td>
-            //             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${order.timestamp}</td>
-            //         `;
-            //         recentOrdersList.appendChild(row);
-            //     });
-            // } else {
-                recentOrdersList.innerHTML = '<tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">最近の注文はありません。</td></tr>';
-            // }
-
         } catch (error) {
-            console.error('Failed to fetch dashboard data:', error);
-            // エラーメッセージを表示するなどのUIフィードバック
-            showToast('ダッシュボードデータの取得に失敗しました。', 'error');
+            console.error(error);
         }
     }
 
-    /**
-     * 売上データをAPIからフェッチし、Chart.jsでグラフを更新します。
-     * @param {string} period - 'daily' または 'monthly'
-     */
-    async function fetchSalesData(period) {
+    async function fetchSalesChartData() {
         try {
-            const response = await fetch(`/api/dashboard/sales?period=${period}`);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
+            const response = await fetch('/api/dashboard/sales?period=daily');
+            if (!response.ok) throw new Error('売上グラフデータの取得に失敗');
             const data = await response.json();
-            console.log("Sales Data:", data);
+            renderSalesChart(data.labels, data.sales);
+        } catch (error) {
+            console.error(error);
+        }
+    }
 
-            const labels = data.labels;
-            const salesData = data.sales;
+    function renderSalesChart(labels, salesData) {
+        const ctx = document.getElementById('salesChart').getContext('2d');
+        
+        if (salesChartInstance) {
+            salesChartInstance.destroy();
+        }
 
-            if (salesChart) {
-                salesChart.destroy(); // 既存のチャートを破棄
-            }
-
-            const ctx = document.getElementById('salesChart').getContext('2d');
-            salesChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: '売上 (¥)',
-                        data: salesData,
-                        backgroundColor: 'rgba(102, 126, 234, 0.2)',
-                        borderColor: colors.primary,
-                        borderWidth: 2,
-                        fill: true,
-                        tension: 0.3
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: false
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return `売上: ¥${context.raw.toLocaleString()}`;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            grid: {
-                                display: false
-                            }
-                        },
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                callback: function(value, index, values) {
-                                    return '¥' + value.toLocaleString();
-                                }
-                            }
-                        }
+        salesChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '売上 (¥)',
+                    data: salesData,
+                    borderColor: 'rgba(211, 117, 68, 1)',
+                    backgroundColor: 'rgba(211, 117, 68, 0.2)',
+                    fill: true,
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true
                     }
                 }
-            });
-
-        } catch (error) {
-            console.error('Failed to fetch sales data:', error);
-            showToast('売上データの取得に失敗しました。', 'error');
-        }
+            }
+        });
     }
 
-    /**
-     * 注文ステータスに応じたCSSクラスを返します。
-     * @param {string} status - 注文ステータス
-     * @returns {string} CSSクラス
-     */
-    function getOrderStatusClass(status) {
-        switch (status) {
-            case 'pending':
-                return 'bg-yellow-100 text-yellow-800';
-            case 'cooking':
-                return 'bg-blue-100 text-blue-800';
-            case 'served':
-                return 'bg-green-100 text-green-800';
-            case 'cancelled':
-                return 'bg-red-100 text-red-800';
-            default:
-                return 'bg-gray-100 text-gray-800';
-        }
-    }
-
-    /**
-     * トースト通知を表示します。
-     * @param {string} message - 表示するメッセージ
-     * @param {string} type - 'success', 'error', 'info', 'warning'
-     */
-    function showToast(message, type) {
-        const toastContainer = document.getElementById('toast-container');
-        if (!toastContainer) {
-            console.error('Toast container not found.');
+    async function resetSalesData() {
+        if (!confirm('本当に全ての売上データをリセットしますか？\nこの操作は取り消せません。全ての注文履歴が削除されます。')) {
             return;
         }
 
-        const toast = document.createElement('div');
-        toast.className = `fixed bottom-4 right-4 p-4 rounded-lg shadow-lg text-white z-50 transition-all duration-300 transform translate-y-full opacity-0`;
-
-        let bgColor;
-        switch (type) {
-            case 'success': bgColor = colors.success; break;
-            case 'error': bgColor = colors.error; break;
-            case 'info': bgColor = colors.primary; break;
-            case 'warning': bgColor = colors.warning; break;
-            default: bgColor = colors.gray; break;
+        try {
+            const response = await fetch('/api/sales/reset', { method: 'POST' });
+            const data = await response.json();
+            if (data.success) {
+                alert(data.message);
+                location.reload();
+            } else {
+                throw new Error(data.message || 'リセットに失敗しました。');
+            }
+        } catch (error) {
+            alert(error.message);
         }
-        toast.style.backgroundColor = bgColor;
-        toast.textContent = message;
-
-        toastContainer.appendChild(toast);
-
-        // フェードイン
-        setTimeout(() => {
-            toast.classList.remove('translate-y-full', 'opacity-0');
-            toast.classList.add('translate-y-0', 'opacity-100');
-        }, 100);
-
-        // 自動で消える
-        setTimeout(() => {
-            toast.classList.remove('translate-y-0', 'opacity-100');
-            toast.classList.add('translate-y-full', 'opacity-0');
-            toast.addEventListener('transitionend', () => toast.remove());
-        }, 5000);
     }
+
+    document.getElementById('reset-sales-btn').addEventListener('click', resetSalesData);
+
+    document.addEventListener('DOMContentLoaded', () => {
+        fetchDashboardData();
+        fetchSalesChartData();
+
+        // 30秒ごとにデータを更新
+        setInterval(() => {
+            fetchDashboardData();
+            fetchSalesChartData();
+        }, 30000);
+    });
 </script>
 {% endblock %}
