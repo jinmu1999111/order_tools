@@ -98,12 +98,19 @@ def qr_auth(token):
         if not table:
             table = Table(name=temp_token.table_name)
             db.session.add(table)
+            # データベースのセッションをフラッシュして、新しいテーブルのIDを確定させる
+            db.session.flush()
+
+        # これで table.id は確実にNoneではなくなる
+        session['table_id'] = table.id
+        session['session_id'] = secrets.token_hex(16)
         
         table.status = 'occupied'
         temp_token.used = True
-        session['session_id'] = secrets.token_hex(16)
-        session['table_id'] = table.id
+        
+        # 関連する変更をすべてコミット
         db.session.commit()
+        
         return redirect(url_for('table_menu', table_id=table.id))
 
     # 次に、卓管理で発行された固定トークンを探す
