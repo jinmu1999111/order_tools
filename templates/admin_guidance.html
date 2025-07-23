@@ -1,10 +1,50 @@
 {% extends 'layout.html' %}
 {% block title %}案内管理{% endblock %}
-
 {% block extra_css %}
+<style>
+    .page-container { max-width: 800px; margin: 0 auto; }
+    .card-header h2 { font-size: 1.8rem; margin-bottom: 0; }
+    #generated-qr-code {
+        display: flex;
+        justify-content: center;
+        padding: 20px;
+        background-color: #fff;
+        border-radius: 8px;
+    }
+</style>
 {% endblock %}
 
 {% block content %}
+<div class="page-container">
+    <h1 class="mb-4" style="font-size: 2.5rem;">💁‍♀️ 案内管理</h1>
+    <div class="card mb-4">
+        <div class="card-header bg-transparent border-0 pt-3">
+            <h2>一時QRコード発行</h2>
+        </div>
+        <div class="card-body">
+            <form id="guidance-form">
+                <div class="mb-3">
+                    <label for="table_name" class="form-label">テーブル名</label>
+                    <input type="text" class="form-control" id="table_name" placeholder="例: 5番テーブル, テラス席A" required>
+                </div>
+                <div class="mb-3">
+                    <label for="guest_count" class="form-label">人数</label>
+                    <input type="number" class="form-control" id="guest_count" value="1" min="1" required>
+                </div>
+                <button type="submit" class="btn btn-primary w-100">QRコードを生成</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card" id="qr-result-card" style="display: none;">
+        <div class="card-header bg-transparent border-0 pt-3 text-center">
+            <h2 id="qr-result-title"></h2>
+        </div>
+        <div class="card-body">
+            <div id="generated-qr-code"></div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -14,42 +54,28 @@
         e.preventDefault();
         const tableName = document.getElementById('table_name').value;
         const guestCount = document.getElementById('guest_count').value;
-
         try {
             const response = await fetch('/api/guidance/generate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ table_name: tableName, guest_count: guestCount })
             });
-
-            // ★★★ 修正点: 401エラー（セッション切れ）のハンドリングを追加 ★★★
             if (response.status === 401) {
                 alert('セッションが切れました。再度ログインしてください。');
                 window.location.href = '/login';
                 return;
             }
-
-            if (!response.ok) {
-                throw new Error('QRコードの発行に失敗しました。サーバーエラーが発生した可能性があります。');
-            }
-
             const data = await response.json();
-
-            if (data.success) {
+            if (response.ok && data.success) {
                 const resultCard = document.getElementById('qr-result-card');
                 const qrContainer = document.getElementById('generated-qr-code');
                 const titleEl = document.getElementById('qr-result-title');
-                
                 titleEl.textContent = `${data.table_name}様 QRコード`;
                 qrContainer.innerHTML = '';
-                new QRCode(qrContainer, {
-                    text: `${window.location.origin}/qr/${data.token}`,
-                    width: 250,
-                    height: 250
-                });
+                new QRCode(qrContainer, { text: `${window.location.origin}/qr/${data.token}`, width: 250, height: 250 });
                 resultCard.style.display = 'block';
             } else {
-                alert(data.message || 'エラーが発生しました。');
+                throw new Error(data.message || 'QRコードの発行に失敗しました。');
             }
         } catch (error) {
             alert(error.message);

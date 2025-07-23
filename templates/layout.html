@@ -20,7 +20,6 @@
             --color-primary: #D37544;
             --color-secondary: #A98F7A;
         }
-
         body {
             font-family: var(--font-main);
             background-color: var(--color-background);
@@ -28,11 +27,7 @@
             padding-top: 70px;
             font-weight: 500;
         }
-
-        h1, h2, h3, h4, h5, h6, .navbar-brand, .btn {
-            font-family: var(--font-main);
-        }
-        
+        h1, h2, h3, h4, h5, h6, .navbar-brand, .btn { font-family: var(--font-main); }
         .navbar-brand { font-size: 2.2rem; }
         .navbar {
             background-color: rgba(249, 245, 240, 0.9);
@@ -40,19 +35,14 @@
             border-bottom: 2px solid var(--color-secondary);
             height: 70px;
         }
-        
         .navbar-toggler { border: none; }
-        .navbar-toggler-icon {
-            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(92, 75, 62, 0.8)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
-        }
-        
+        .navbar-toggler-icon { background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(92, 75, 62, 0.8)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e"); }
         .card {
             background-color: #FFFFFF;
             border: 1px solid #EAE0D5;
             box-shadow: 0 4px 15px rgba(0,0,0,0.05);
             border-radius: 12px;
         }
-        
         @media (max-width: 991.98px) {
             .navbar-collapse {
                 background-color: var(--color-background);
@@ -62,22 +52,9 @@
                 border-top: 1px solid #EAE0D5;
             }
         }
-
-        .btn-primary {
-            background-color: var(--color-primary);
-            border-color: var(--color-primary);
-        }
-        .navbar-brand-container {
-            display: flex;
-            align-items: center;
-        }
-        #cooking-animation {
-            width: 30px;
-            height: 30px;
-            margin-left: 8px;
-            display: none;
-            vertical-align: middle;
-        }
+        .btn-primary { background-color: var(--color-primary); border-color: var(--color-primary); }
+        .navbar-brand-container { display: flex; align-items: center; }
+        #cooking-animation { width: 30px; height: 30px; margin-left: 8px; display: none; vertical-align: middle; }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
@@ -129,7 +106,6 @@
         document.addEventListener('DOMContentLoaded', function() {
             const animationElement = document.getElementById('cooking-animation');
             if (!animationElement) return;
-
             const imageSources = [
                 "{{ url_for('static', filename='images/cooking_1.png') }}",
                 "{{ url_for('static', filename='images/cooking_2.png') }}",
@@ -137,7 +113,6 @@
             ];
             let currentFrame = 0;
             let animationInterval;
-
             function startAnimation() {
                 if (animationInterval) return;
                 animationInterval = setInterval(() => {
@@ -145,18 +120,20 @@
                     animationElement.src = imageSources[currentFrame];
                 }, 500);
             }
-
             function stopAnimation() {
                 clearInterval(animationInterval);
                 animationInterval = null;
             }
-
             async function checkKitchenStatus() {
                 try {
                     const response = await fetch('/api/kitchen/status');
+                    if (response.status === 401) { // セッション切れを検知
+                        stopAnimation();
+                        animationElement.style.display = 'none';
+                        return;
+                    }
                     if (!response.ok) return;
                     const data = await response.json();
-                    
                     if (data.cooking_active) {
                         animationElement.style.display = 'inline-block';
                         startAnimation();
@@ -168,7 +145,6 @@
                     console.error('Failed to check kitchen status:', error);
                 }
             }
-            
             checkKitchenStatus();
             setInterval(checkKitchenStatus, 15000);
         });
