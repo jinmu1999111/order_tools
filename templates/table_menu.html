@@ -224,20 +224,16 @@
             });
             
             if (response.ok) {
-                const data = await response.json();
-                if (data.success) {
-                    alert('ご注文ありがとうございます！お料理が出来上がるまで少々お待ちください。');
-                    cart = {};
-                    updateCartDisplay();
-                    const cartOffcanvas = bootstrap.Offcanvas.getInstance(document.getElementById('cart-sidebar'));
-                    if (cartOffcanvas) {
-                        cartOffcanvas.hide();
-                    }
-                } else {
-                    throw new Error(data.message || '注文の送信に失敗しました。');
+                alert('ご注文ありがとうございます！お料理が出来上がるまで少々お待ちください。');
+                cart = {};
+                updateCartDisplay();
+                const cartOffcanvas = bootstrap.Offcanvas.getInstance(document.getElementById('cart-sidebar'));
+                if (cartOffcanvas) {
+                    cartOffcanvas.hide();
                 }
             } else {
-                throw new Error('サーバーとの通信に失敗しました。');
+                const errorData = await response.json();
+                throw new Error(errorData.message || '注文の送信に失敗しました。');
             }
         } catch (error) {
             alert(error.message);
