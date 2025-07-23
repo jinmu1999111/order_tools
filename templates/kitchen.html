@@ -52,6 +52,10 @@
 </div>
 
 <script>
+    // ★★★ 修正点 1: AudioContextを最初に一度だけ作成 ★★★
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioContext = new AudioContext();
+
     let soundEnabled = true;
     let knownOrderIds = new Set();
 
@@ -64,14 +68,19 @@
             }
             const data = await response.json();
             if (data.success) {
-                const newOrderIds = new Set(data.orders.map(o => o.session_id));
-                const isNewOrder = [...newOrderIds].some(id => !knownOrderIds.has(id));
+                // 注文数を更新
+                const pendingOrders = data.orders || [];
+                document.getElementById('pending-count').textContent = pendingOrders.length;
 
-                if (isNewOrder && knownOrderIds.size > 0) {
+                const newOrderIds = new Set(pendingOrders.map(o => o.session_id));
+                const isNewOrder = [...newOrderIds].some(id => !knownOrderIds.has(id));
+                
+                if (isNewOrder && knownOrderIds.size > 0) { // 最初の読み込みでは鳴らさない
                     if(soundEnabled) playSound();
                 }
-                knownOrderIds = newOrderIds;
-                renderOrders(data.orders);
+
+                knownOrderIds = new Set(pendingOrders.map(o => o.session_id));
+                renderOrders(pendingOrders);
             }
         } catch (error) {
             console.error("Fetch error:", error);
@@ -123,27 +132,48 @@
         fetchOrders();
     }
     
+    // ★★★ 修正点 2: playSound関数を修正 ★★★
     function playSound() {
+        // AudioContextがユーザー操作なしに開始できない場合（suspended状態）は何もしない。
+        // この状態はボタンクリックで解除される。
+        if (audioContext.state === 'suspended') {
+            return;
+        }
         try {
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
             const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
             oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(523.25, audioContext.currentTime); // C5
-            oscillator.connect(audioContext.destination);
-            oscillator.start();
-            oscillator.stop(audioContext.currentTime + 0.2);
+            oscillator.frequency.setValueAtTime(440, audioContext.currentTime); // A4
+            gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
+
+            gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.5);
+            oscillator.start(audioContext.currentTime);
+            oscillator.stop(audioContext.currentTime + 0.5);
+
         } catch (e) {
             console.error("Sound play failed", e);
         }
     }
 
+    // ★★★ 修正点 3: ボタンクリックでAudioContextを有効化 ★★★
     document.getElementById('sound-toggle').addEventListener('click', () => {
         soundEnabled = !soundEnabled;
         const icon = document.querySelector('#sound-toggle i');
         icon.className = soundEnabled ? 'bi bi-volume-up-fill' : 'bi bi-volume-mute-fill';
+
+        // ユーザーの操作をきっかけにAudioContextを有効化（これが重要）
+        if (audioContext.state === 'suspended') {
+            audioContext.resume().then(() => {
+                console.log('AudioContext resumed!');
+            });
+        }
     });
 
     document.addEventListener('DOMContentLoaded', fetchOrders);
-    setInterval(fetchOrders, 15000);
+    setInterval(fetchOrders, 10000); // 10秒に短縮してテストしやすく
 </script>
 {% endblock %}
