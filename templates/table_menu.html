@@ -129,14 +129,13 @@
         const name = itemEl.dataset.itemName;
         const price = parseInt(itemEl.dataset.itemPrice);
         
-        // カート内の数量を直接更新するのではなく、加算する
         if (cart[itemId]) {
             cart[itemId].quantity += qty;
         } else {
             cart[itemId] = { name, price, quantity: qty };
         }
 
-        document.getElementById(`qty-${itemId}`).textContent = 0; // 数量表示をリセット
+        document.getElementById(`qty-${itemId}`).textContent = 0;
         updateCartDisplay();
     }
 
@@ -177,13 +176,13 @@
                 alert('ご注文ありがとうございます！お料理が出来上がるまで少々お待ちください。');
                 cart = {};
                 updateCartDisplay();
-                // カートを閉じる
-                const cartSidebar = bootstrap.Offcanvas.getInstance('#cart-sidebar');
-                if (cartSidebar) {
-                    cartSidebar.hide();
+                const cartOffcanvas = bootstrap.Offcanvas.getInstance(document.getElementById('cart-sidebar'));
+                if (cartOffcanvas) {
+                    cartOffcanvas.hide();
                 }
             } else {
-                throw new Error('注文の送信に失敗しました。');
+                const errorData = await response.json();
+                throw new Error(errorData.message || '注文の送信に失敗しました。');
             }
         } catch (error) {
             alert(error.message);

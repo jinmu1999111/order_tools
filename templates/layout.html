@@ -59,8 +59,14 @@
             border-radius: 12px;
         }
         
-        .offcanvas {
-             background-color: var(--color-background);
+        @media (max-width: 991.98px) {
+            .navbar-collapse {
+                background-color: var(--color-background);
+                padding: 1rem;
+                border-radius: 0 0 12px 12px;
+                margin-top: 8px;
+                border-top: 1px solid #EAE0D5;
+            }
         }
 
         .btn-primary {
@@ -80,37 +86,31 @@
         <div class="container-fluid">
             <a class="navbar-brand" href="{% if session.get('qr_token') %}{{ url_for('table_menu', table_id=session.get('table_id')) }}{% else %}{{ url_for('index') }}{% endif %}">Moi</a>
             
-            <button class="navbar-toggler" type="button" data-bs-toggle="offcanvas" data-bs-target="#offcanvasNavbar" aria-controls="offcanvasNavbar">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
 
-            <div class="offcanvas offcanvas-end" tabindex="-1" id="offcanvasNavbar" aria-labelledby="offcanvasNavbarLabel">
-                <div class="offcanvas-header">
-                    <h5 class="offcanvas-title" id="offcanvasNavbarLabel">Menu</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
-                </div>
-                <div class="offcanvas-body">
-                    <ul class="navbar-nav ms-auto">
-                        {% if session.get('logged_in') %}
-                            <li class="nav-item"><a class="nav-link" href="{{ url_for('kitchen') }}">キッチン</a></li>
-                            <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard') }}">ダッシュボード</a></li>
-                            <li class="nav-item dropdown">
-                                <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">運営メニュー</a>
-                                <ul class="dropdown-menu dropdown-menu-end">
-                                    <li><a class="dropdown-item" href="{{ url_for('admin_guidance') }}">案内管理</a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('admin_menu') }}">メニュー管理</a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('admin_tables') }}">卓管理</a></li>
-                                    <li><a class="dropdown-item" href="{{ url_for('admin_history') }}">注文履歴</a></li>
-                                </ul>
-                            </li>
-                            <li class="nav-item"><a class="nav-link" href="{{ url_for('logout') }}">ログアウト</a></li>
-                        {% elif session.get('qr_token') %}
-                            <li class="nav-item"><span class="navbar-text">ご注文ありがとうございます</span></li>
-                        {% else %}
-                            <li class="nav-item"><a class="nav-link" href="{{ url_for('login') }}">管理者ログイン</a></li>
-                        {% endif %}
-                    </ul>
-                </div>
+            <div class="collapse navbar-collapse" id="navbarContent">
+                <ul class="navbar-nav ms-auto">
+                    {% if session.get('logged_in') %}
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('kitchen') }}">キッチン</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard') }}">ダッシュボード</a></li>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">運営メニュー</a>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item" href="{{ url_for('admin_guidance') }}">案内管理</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('admin_menu') }}">メニュー管理</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('admin_tables') }}">卓管理</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('admin_history') }}">注文履歴</a></li>
+                            </ul>
+                        </li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('logout') }}">ログアウト</a></li>
+                    {% elif session.get('qr_token') %}
+                        <li class="nav-item"><span class="navbar-text">ご注文ありがとうございます</span></li>
+                    {% else %}
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('login') }}">管理者ログイン</a></li>
+                    {% endif %}
+                </ul>
             </div>
         </div>
     </nav>

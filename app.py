@@ -56,7 +56,6 @@ class Table(db.Model):
     name = db.Column(db.String(100), unique=True, nullable=False)
     status = db.Column(db.String(20), default='available')
     active_qr_token = db.Column(db.String(100), unique=True, nullable=True)
-    # タイムゾーン情報を正しく扱うために `timezone=True` を追加
     qr_token_expiry = db.Column(db.DateTime(timezone=True), nullable=True)
     orders = db.relationship('Order', backref='table', lazy='dynamic', cascade="all, delete-orphan")
 
@@ -81,7 +80,6 @@ def index():
 @app.route('/qr/<token>')
 def qr_auth(token):
     table = Table.query.filter_by(active_qr_token=token).first()
-    # タイムゾーン対応の現在時刻で比較
     if not table or (table.qr_token_expiry and table.qr_token_expiry < datetime.datetime.now(JST)):
         flash('QRコードが無効か期限切れです。', 'danger')
         return redirect(url_for('index'))
@@ -165,6 +163,36 @@ def admin_guidance():
     return render_template('admin_guidance.html')
 
 # --- APIエンドポイント ---
+@app.route('/api/order/submit', methods=['POST'])
+def submit_order():
+    data = request.get_json()
+    table_id = data.get('table_id')
+    items = data.get('items')
+
+    if not table_id or not items:
+        return jsonify(success=False, message="無効な注文データです。"), 400
+
+    table = db.session.get(Table, table_id)
+    if not table:
+        return jsonify(success=False, message="テーブル情報が見つかりません。"), 404
+
+    session_id = secrets.token_hex(16)
+    for item_id, item_data in items.items():
+        menu_item = db.session.get(MenuItem, int(item_id))
+        if menu_item and item_data.get('quantity', 0) > 0:
+            menu_item.popularity_count += item_data['quantity']
+            for _ in range(item_data['quantity']):
+                order = Order(
+                    item_name=menu_item.name,
+                    item_price=menu_item.price,
+                    table_id=table.id,
+                    session_id=session_id
+                )
+                db.session.add(order)
+    
+    db.session.commit()
+    return jsonify(success=True)
+
 @app.route('/api/menu/add', methods=['POST'])
 @login_required
 def api_add_menu_item():
