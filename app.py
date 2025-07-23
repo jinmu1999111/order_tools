@@ -1,13 +1,9 @@
+# 1. インポートの確認（ファイルの最初）
+from sqlalchemy import desc  # これが抜けている可能性
+
 import os
 import datetime
 import secrets
-
-# app.pyの最初の方に追加
-from dotenv import load_dotenv
-
-# .envファイルを読み込む
-load_dotenv()
-
 from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, session, abort
 from flask_sqlalchemy import SQLAlchemy
@@ -33,6 +29,14 @@ os.makedirs(instance_path, exist_ok=True)
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 JST = pytz.timezone('Asia/Tokyo')
+
+# 2. Flaskアプリケーション作成後に追加（25行目付近）
+app = Flask(__name__)
+
+@app.context_processor
+def inject_globals():
+    """全てのテンプレートでJSTを使えるようにする"""
+    return dict(JST=JST)
 
 # --- ログイン機能の設定 ---
 login_manager = LoginManager()
@@ -186,14 +190,18 @@ def kitchen():
 def dashboard():
     return render_template('dashboard.html')
 
-@app.route('/admin/menu')
+app.route('/admin/menu')
 @login_required
 def admin_menu():
-    menu_items_query = MenuItem.query.order_by(MenuItem.category, MenuItem.sort_order).all()
-    categorized_items = defaultdict(list)
-    for item in menu_items_query:
-        categorized_items[item.category].append(item)
-    return render_template('admin_menu.html', categorized_items=categorized_items)
+    try:
+        menu_items_query = MenuItem.query.order_by(MenuItem.category, MenuItem.sort_order).all()
+        categorized_items = defaultdict(list)
+        for item in menu_items_query:
+            categorized_items[item.category].append(item)
+        return render_template('admin_menu.html', categorized_items=categorized_items)
+    except Exception as e:
+        app.logger.error(f"Error in admin_menu: {str(e)}")
+        return f"Error: {str(e)}", 500
 
 @app.route('/admin/tables')
 @login_required
@@ -521,6 +529,64 @@ def api_kitchen_status():
     q = Order.query.filter(Order.status.in_(['pending', 'preparing']))
     is_cooking = db.session.query(q.exists()).scalar()
     return jsonify({'cooking_active': is_cooking})
+# 4. ファイルの最後に追加（init-dbコマンドの前）
+@app.route('/admin/analytics')
+@login_required
+def admin_analytics():
+    """売上統計ページ"""
+    try:
+        today_start = datetime.datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        today_orders = Order.query.filter(
+            Order.timestamp >= today_start
+        ).count()
+        
+        today_revenue = db.session.query(func.sum(Order.item_price)).filter(
+            Order.timestamp >= today_start,
+            Order.status != 'cancelled'
+        ).scalar() or 0
+        
+        popular_items_query = db.session.query(
+            Order.item_name, 
+            func.count(Order.id).label('total_quantity')
+        ).filter(
+            Order.timestamp >= today_start,
+            Order.status != 'cancelled'
+        ).group_by(Order.item_name).order_by(desc('total_quantity')).limit(5).all()
+        
+        popular_items = [
+            {'item_name': name, 'total_quantity': count} 
+            for name, count in popular_items_query
+        ]
+        
+        return render_template('admin_analytics.html', 
+                             today_orders=today_orders,
+                             today_revenue=today_revenue,
+                             popular_items=popular_items)
+    except Exception as e:
+        app.logger.error(f"Error in admin_analytics: {str(e)}")
+        return f"Error: {str(e)}", 500
+
+@app.route('/admin/security')
+@login_required
+def admin_security():
+    """セキュリティログページ"""
+    try:
+        recent_logs = []
+        return render_template('admin_security.html', recent_logs=recent_logs)
+    except Exception as e:
+        app.logger.error(f"Error in admin_security: {str(e)}")
+        return f"Error: {str(e)}", 500
+
+# 5. エラーハンドラーの追加
+@app.errorhandler(500)
+def internal_error(error):
+    app.logger.error(f"Internal error: {str(error)}")
+    return render_template('500.html'), 500
+
+@app.errorhandler(404)
+def not_found_error(error):
+    return render_template('404.html'), 404
 
 # --- データベース初期化コマンド ---
 @app.cli.command("init-db")
