@@ -8,8 +8,8 @@
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <!-- 「Moi」用の絵本風フォントと、他の見出し用のフォントを読み込み -->
-    <link href="https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&family=Yuji+Syuku&family=Noto+Sans+JP:wght@400;500&display=swap" rel="stylesheet">
+    <!-- サイト全体に適用する丸ゴシック系フォント「Kiwi Maru」を読み込み -->
+    <link href="https://fonts.googleapis.com/css2?family=Kiwi+Maru:wght@400;500&display=swap" rel="stylesheet">
 
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -18,9 +18,8 @@
     <!-- Forest Restaurant Design CSS -->
     <style>
         :root {
-            /* 見出し用のフォント */
-            --font-heading: 'Yuji Syuku', serif;
-            --font-body: 'Noto Sans JP', sans-serif;
+            /* サイト全体のフォントを「Kiwi Maru」に統一 */
+            --font-main: 'Kiwi Maru', serif;
             --color-text: #5D4037;
             --color-primary: #81C784;
             --color-secondary: #A1887F;
@@ -28,16 +27,18 @@
         }
 
         body {
-            font-family: var(--font-body);
+            font-family: var(--font-main);
             background-image: url("{{ url_for('static', filename='images/bg.png') }}");
             background-size: cover;
             background-attachment: fixed;
             color: var(--color-text);
             padding-top: 70px;
+            font-weight: 500; /* 少し太めにして読みやすくする */
         }
 
-        h1, h2, h3, h4, h5, h6 {
-            font-family: var(--font-heading);
+        /* 見出しもすべて同じフォントで統一感を出す */
+        h1, h2, h3, h4, h5, h6, .navbar-brand {
+            font-family: var(--font-main);
             color: var(--color-text);
         }
 
@@ -49,11 +50,9 @@
             height: 70px;
         }
         
-        /* ブランド名に新しいフォントを適用 */
         .navbar-brand {
-            font-family: 'Mochiy Pop One', sans-serif;
-            font-size: 2.2rem; /* 少し大きく調整 */
-            color: var(--color-text) !important;
+            font-size: 2.2rem;
+            font-weight: 500;
         }
 
         .main-content {
@@ -67,17 +66,19 @@
             border-radius: 8px;
         }
 
+        .btn {
+             font-family: var(--font-main);
+        }
+
         .btn-primary {
             background-color: var(--color-primary);
             border: none;
             color: white;
-            font-weight: 500;
         }
         .btn-secondary {
             background-color: var(--color-secondary);
             border: none;
             color: white;
-            font-weight: 500;
         }
     </style>
     {% block extra_css %}{% endblock %}
