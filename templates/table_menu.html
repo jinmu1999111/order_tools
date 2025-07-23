@@ -1,51 +1,90 @@
 {% extends "layout.html" %}
-{% block title %}メニュー注文 - テーブル{{ table.name }}{% endblock %}
-{% block content %}
-<style>
-    .menu-header { background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%); color: white; padding: 2rem 0; margin-bottom: 2rem; text-align: center; }
-    .category-nav { position: sticky; top: 60px; z-index: 100; background: white; padding: 1rem; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin-bottom: 2rem; border-radius: 10px; }
-    .menu-item { background: white; border-radius: 15px; padding: 1.5rem; margin-bottom: 1.5rem; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-    .quantity-controls { display: flex; align-items: center; justify-content: space-between; margin-top: 1rem; }
-    .qty-btn { background: #ff6b6b; color: white; border: none; width: 35px; height: 35px; border-radius: 50%; font-weight: bold; }
-    .qty-display { min-width: 50px; text-align: center; font-weight: bold; font-size: 1.1rem; }
-    .add-to-cart-btn { background: linear-gradient(45deg, #ff6b6b, #ee5a24); color: white; border: none; padding: 0.75rem 1.5rem; border-radius: 25px; font-weight: bold; }
-    .floating-cart-btn { position: fixed; bottom: 20px; right: 20px; background: #ff6b6b; color: white; width: 60px; height: 60px; border-radius: 50%; font-size: 1.5rem; box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4); z-index: 999; border: none; }
-    .cart-sidebar { position: fixed; right: -100%; top: 0; width: 100%; max-width: 400px; height: 100vh; background: white; box-shadow: -5px 0 15px rgba(0,0,0,0.1); transition: right 0.3s ease; z-index: 1000; display: flex; flex-direction: column; }
-    .cart-sidebar.active { right: 0; }
-    .cart-content { flex-grow: 1; overflow-y: auto; padding: 1rem; }
-    .cart-total { padding: 1rem; border-top: 1px solid #ddd; }
-    .order-btn { background: #2ed573; color: white; border: none; padding: 1rem; width: 100%; border-radius: 10px; font-size: 1.2rem; font-weight: bold; }
-</style>
+{% block title %}ご注文 - {{ table.name }}{% endblock %}
 
+{% block extra_css %}
+<style>
+    .menu-header {
+        text-align: center;
+        padding: 2.5rem 1rem;
+        margin-bottom: 2rem;
+    }
+    .menu-header h1 {
+        font-size: 3.5rem;
+    }
+    .menu-header p {
+        font-size: 1.2rem;
+        color: var(--color-secondary);
+    }
+    .section-title {
+        font-size: 2.5rem;
+        text-align: center;
+        margin: 4rem 0 2rem 0;
+        color: var(--color-secondary);
+    }
+    .menu-item {
+        border-radius: 8px;
+        text-align: center;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .item-name {
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+    }
+    .item-price {
+        font-size: 1.3rem;
+        font-weight: 500;
+        color: var(--color-primary);
+        margin-bottom: 1rem;
+    }
+    .qty-btn {
+        background: #fff;
+        border: 1px solid #EAE0D5;
+    }
+    .add-to-cart-btn {
+        background: var(--color-primary);
+    }
+    .floating-cart-btn {
+        background: var(--color-text);
+        color: white;
+        width: 65px;
+        height: 65px;
+        border-radius: 50%;
+        font-size: 1.8rem;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        z-index: 999;
+        border: 3px solid white;
+    }
+    .cart-sidebar {
+        background-color: rgba(249, 245, 240, 0.95);
+        backdrop-filter: blur(5px);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
 <div class="menu-header">
-    <h1><i class="fas fa-utensils me-2"></i>メニュー</h1>
+    <h1>メニュー</h1>
     <p>テーブル: {{ table.name }}</p>
 </div>
 
 <div class="container">
-    <div class="category-nav text-center">
-        {% for category in categorized_menu.keys() %}
-        <a href="#category-{{ category }}" class="btn btn-light m-1">{{ category }}</a>
-        {% endfor %}
-    </div>
-
     {% for category, items in categorized_menu.items() %}
-    <div id="category-{{ category }}" class="menu-section mb-5">
-        <h2>{{ category }}</h2>
-        <hr>
-        <div class="row">
+    <div id="category-{{ category|replace(' ', '-') }}" class="menu-section">
+        <h2 class="section-title">{{ category }}</h2>
+        <div class="row justify-content-center">
             {% for item in items %}
             <div class="col-md-6 col-lg-4">
-                <div class="menu-item" data-item-id="{{ item.id }}" data-item-name="{{ item.name }}" data-item-price="{{ item.price }}">
-                    <h4>{{ item.name }}</h4>
-                    <p class="fs-5 text-danger fw-bold">¥{{ "{:,}".format(item.price) }}</p>
-                    <div class="quantity-controls">
-                        <div class="input-group">
+                <div class="menu-item card" data-item-id="{{ item.id }}" data-item-name="{{ item.name }}" data-item-price="{{ item.price }}">
+                    <h4 class="item-name">{{ item.name }}</h4>
+                    <p class="item-price">¥{{ "{:,}".format(item.price) }}</p>
+                    <div class="d-flex justify-content-center align-items-center gap-3">
+                        <div class="input-group" style="width: 150px;">
                             <button class="btn btn-outline-secondary qty-btn" type="button" onclick="changeQuantity('{{ item.id }}', -1)">-</button>
-                            <span class="qty-display form-control text-center" id="qty-{{ item.id }}">0</span>
+                            <span class="form-control text-center fs-5" id="qty-{{ item.id }}">0</span>
                             <button class="btn btn-outline-secondary qty-btn" type="button" onclick="changeQuantity('{{ item.id }}', 1)">+</button>
                         </div>
-                        <button class="add-to-cart-btn ms-3" onclick="addToCart('{{ item.id }}')">追加</button>
+                        <button class="btn btn-primary add-to-cart-btn" onclick="addToCart('{{ item.id }}')">カートへ</button>
                     </div>
                 </div>
             </div>
@@ -55,84 +94,22 @@
     {% endfor %}
 </div>
 
-<button class="floating-cart-btn" onclick="toggleCart()">
-    <i class="fas fa-shopping-cart"></i>
+<button class="floating-cart-btn btn" onclick="toggleCart()">
+    <i class="bi bi-basket3-fill"></i>
     <span class="badge bg-danger rounded-pill position-absolute top-0 start-100 translate-middle" id="cart-count" style="display: none;"></span>
 </button>
 
-<div class="cart-sidebar" id="cart-sidebar">
-    <div class="d-flex justify-content-between align-items-center p-3 border-bottom">
-        <h4 class="mb-0">注文内容</h4>
-        <button class="btn-close" onclick="toggleCart()"></button>
+<div class="cart-sidebar offcanvas offcanvas-end" tabindex="-1" id="cart-sidebar">
+    <div class="offcanvas-header border-bottom">
+        <h5 class="offcanvas-title">ご注文内容</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
     </div>
-    <div class="cart-content" id="cart-items"><p class="text-center text-muted">カートは空です。</p></div>
-    <div class="cart-total">
+    <div class="offcanvas-body" id="cart-items">
+        <p class="text-center text-muted p-4">カートは空です。</p>
+    </div>
+    <div class="p-3 border-top">
         <h4>合計: <span id="total">¥0</span></h4>
-        <button class="order-btn" onclick="submitOrder()" id="submit-order-btn" disabled>注文を確定する</button>
+        <button class="btn btn-success btn-lg w-100" onclick="submitOrder()" id="submit-order-btn" disabled>注文を確定する</button>
     </div>
 </div>
-
-<script>
-    let cart = {};
-    const tableId = {{ table.id }};
-
-    function changeQuantity(itemId, change) {
-        const qtyEl = document.getElementById(`qty-${itemId}`);
-        let qty = parseInt(qtyEl.textContent) + change;
-        if (qty < 0) qty = 0;
-        qtyEl.textContent = qty;
-    }
-
-    function addToCart(itemId) {
-        const qty = parseInt(document.getElementById(`qty-${itemId}`).textContent);
-        if (qty === 0) return;
-        const itemEl = document.querySelector(`[data-item-id="${itemId}"]`);
-        const name = itemEl.dataset.itemName;
-        const price = parseInt(itemEl.dataset.itemPrice);
-        cart[itemId] = { name, price, quantity: (cart[itemId]?.quantity || 0) + qty };
-        document.getElementById(`qty-${itemId}`).textContent = 0;
-        updateCartDisplay();
-    }
-
-    function updateCartDisplay() {
-        const cartItemsEl = document.getElementById('cart-items');
-        const cartCountEl = document.getElementById('cart-count');
-        let totalItems = 0, totalPrice = 0, html = '';
-        Object.values(cart).forEach(item => {
-            totalItems += item.quantity;
-            totalPrice += item.price * item.quantity;
-            html += `<div class="p-2 border-bottom">${item.name} x ${item.quantity} - ¥${(item.price * item.quantity).toLocaleString()}</div>`;
-        });
-        cartItemsEl.innerHTML = html || '<p class="text-center text-muted">カートは空です。</p>';
-        document.getElementById('total').textContent = `¥${totalPrice.toLocaleString()}`;
-        cartCountEl.textContent = totalItems;
-        cartCountEl.style.display = totalItems > 0 ? 'inline-block' : 'none';
-        document.getElementById('submit-order-btn').disabled = totalItems === 0;
-    }
-
-    function toggleCart() { document.getElementById('cart-sidebar').classList.toggle('active'); }
-
-    async function submitOrder() {
-        const btn = document.getElementById('submit-order-btn');
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 処理中...';
-        
-        const response = await fetch('/api/order/submit', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ table_id: tableId, items: cart })
-        });
-        
-        if (response.ok) {
-            alert('注文が完了しました！');
-            cart = {};
-            updateCartDisplay();
-            toggleCart();
-        } else {
-            alert('注文に失敗しました。');
-        }
-        btn.disabled = false;
-        btn.textContent = '注文を確定する';
-    }
-</script>
 {% endblock %}

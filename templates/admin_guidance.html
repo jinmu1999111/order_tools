@@ -1,316 +1,43 @@
 {% extends 'layout.html' %}
+{% block title %}案内管理{% endblock %}
 
-{% block title %}管理ガイダンス{% endblock %}
-
-{% block content %}
-<div class="container mx-auto p-4">
-    <h1 class="text-3xl font-bold text-gray-800 mb-6">📚 管理ガイダンス</h1>
-
-    <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-        <h2 class="text-xl font-semibold text-gray-700 mb-4">システム概要</h2>
-        <p class="text-gray-600 mb-4">
-            このシステムは、飲食店向けの注文管理を効率化するために設計されています。お客様はQRコードをスキャンしてメニューを閲覧・注文し、キッチンスタッフはリアルタイムで注文状況を管理できます。管理者ダッシュボードでは、売上分析やテーブル稼働状況の把握が可能です。
-        </p>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div class="flex items-center text-gray-700">
-                <i class="fas fa-mobile-alt text-primary mr-3 text-xl"></i>
-                <span>モバイルからの簡単注文</span>
-            </div>
-            <div class="flex items-center text-gray-700">
-                <i class="fas fa-utensils text-primary mr-3 text-xl"></i>
-                <span>キッチンでのリアルタイム管理</span>
-            </div>
-            <div class="flex items-center text-gray-700">
-                <i class="fas fa-chart-line text-primary mr-3 text-xl"></i>
-                <span>詳細な売上・統計分析</span>
-            </div>
-            <div class="flex items-center text-gray-700">
-                <i class="fas fa-qrcode text-primary mr-3 text-xl"></i>
-                <span>QRコードによるテーブル認証</span>
-            </div>
-        </div>
-    </div>
-
-    <!-- 各機能の使用方法 (アコーディオンUI) -->
-    <div class="mb-8">
-        <h2 class="text-xl font-semibold text-gray-700 mb-4">機能別ガイド</h2>
-        <div id="accordion-guide">
-            <!-- ダッシュボード -->
-            <div class="border border-gray-200 rounded-lg mb-2">
-                <h3 class="flex items-center justify-between p-4 bg-gray-50 cursor-pointer" data-toggle="collapse" data-target="#collapseDashboard">
-                    <span class="font-medium text-gray-800"><i class="fas fa-chart-pie text-secondary mr-2"></i>ダッシュボード</span>
-                    <i class="fas fa-chevron-down text-gray-500 transition-transform duration-300"></i>
-                </h3>
-                <div id="collapseDashboard" class="collapse hidden p-4 text-gray-600">
-                    <p class="mb-2"><strong>目的:</strong> 店舗の売上、注文状況、テーブル稼働率などをリアルタイムで把握します。</p>
-                    <ul class="list-disc list-inside ml-4">
-                        <li>今日の売上、注文数、平均客単価を確認できます。</li>
-                        <li>日別・月別の売上トレンドをグラフで視覚化します。</li>
-                        <li>人気メニューランキングで、売れ筋商品を把握できます。</li>
-                        <li>テーブルの「空き」「使用中」「清掃中」の状況を一覧できます。</li>
-                    </ul>
-                </div>
-            </div>
-
-            <!-- キッチン管理 -->
-            <div class="border border-gray-200 rounded-lg mb-2">
-                <h3 class="flex items-center justify-between p-4 bg-gray-50 cursor-pointer" data-toggle="collapse" data-target="#collapseKitchen">
-                    <span class="font-medium text-gray-800"><i class="fas fa-concierge-bell text-secondary mr-2"></i>キッチン管理</span>
-                    <i class="fas fa-chevron-down text-gray-500 transition-transform duration-300"></i>
-                </h3>
-                <div id="collapseKitchen" class="collapse hidden p-4 text-gray-600">
-                    <p class="mb-2"><strong>目的:</strong> お客様からの注文をリアルタイムで受け付け、調理状況を管理します。</p>
-                    <ul class="list-disc list-inside ml-4">
-                        <li>新規注文がリアルタイムで通知されます。</li>
-                        <li>各注文のステータス（保留中、調理中、提供済み、キャンセル）を更新できます。</li>
-                        <li>テーブルごとの注文を一覧で確認できます。</li>
-                    </ul>
-                </div>
-            </div>
-
-            <!-- メニュー管理 -->
-            <div class="border border-gray-200 rounded-lg mb-2">
-                <h3 class="flex items-center justify-between p-4 bg-gray-50 cursor-pointer" data-toggle="collapse" data-target="#collapseMenu">
-                    <span class="font-medium text-gray-800"><i class="fas fa-clipboard-list text-secondary mr-2"></i>メニュー管理</span>
-                    <i class="fas fa-chevron-down text-gray-500 transition-transform duration-300"></i>
-                </h3>
-                <div id="collapseMenu" class="collapse hidden p-4 text-gray-600">
-                    <p class="mb-2"><strong>目的:</strong> 提供するメニュー項目を追加、編集、削除します。</p>
-                    <ul class="list-disc list-inside ml-4">
-                        <li>メニュー名、価格、カテゴリを設定できます。</li>
-                        <li>メニューの表示/非表示を切り替えることができます。</li>
-                        <li>カテゴリごとにメニューを整理できます。</li>
-                    </ul>
-                </div>
-            </div>
-
-            <!-- テーブル管理 -->
-            <div class="border border-gray-200 rounded-lg mb-2">
-                <h3 class="flex items-center justify-between p-4 bg-gray-50 cursor-pointer" data-toggle="collapse" data-target="#collapseTables">
-                    <span class="font-medium text-gray-800"><i class="fas fa-chair text-secondary mr-2"></i>テーブル管理</span>
-                    <i class="fas fa-chevron-down text-gray-500 transition-transform duration-300"></i>
-                </h3>
-                <div id="collapseTables" class="collapse hidden p-4 text-gray-600">
-                    <p class="mb-2"><strong>目的:</strong> 店舗のテーブル情報を管理し、QRコードを生成します。</p>
-                    <ul class="list-disc list-inside ml-4">
-                        <li>テーブルの追加、削除、座席数の変更が可能です。</li>
-                        <li>各テーブルのQRコードを生成し、印刷できます。</li>
-                        <li>テーブルのステータス（空き、使用中、清掃中）を手動で更新できます。</li>
-                        <li>フロアプランでテーブル配置を視覚的に確認できます。</li>
-                    </ul>
-                </div>
-            </div>
-
-            <!-- 注文履歴 -->
-            <div class="border border-gray-200 rounded-lg mb-2">
-                <h3 class="flex items-center justify-between p-4 bg-gray-50 cursor-pointer" data-toggle="collapse" data-target="#collapseHistory">
-                    <span class="font-medium text-gray-800"><i class="fas fa-history text-secondary mr-2"></i>注文履歴</span>
-                    <i class="fas fa-chevron-down text-gray-500 transition-transform duration-300"></i>
-                </h3>
-                <div id="collapseHistory" class="collapse hidden p-4 text-gray-600">
-                    <p class="mb-2"><strong>目的:</strong> 過去の注文履歴を確認し、売上分析を行います。</p>
-                    <ul class="list-disc list-inside ml-4">
-                        <li>詳細な検索・フィルター機能で特定の注文を素早く見つけられます。</li>
-                        <li>注文データをCSV/PDF形式でエクスポートできます。</li>
-                        <li>売上分析レポートを生成できます。</li>
-                        <li>必要に応じて返金・キャンセル処理を実行できます。</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- よくある問題と解決方法 -->
-    <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-        <h2 class="text-xl font-semibold text-gray-700 mb-4">よくある問題と解決方法</h2>
-        <ul class="list-disc list-inside ml-4 text-gray-600">
-            <li class="mb-2"><strong>Q: QRコードが読み取れない。</strong><br>A: QRコードが破損していないか、照明が十分か確認してください。また、QRコードが期限切れでないか「テーブル管理」画面で確認し、必要であれば再生成してください。</li>
-            <li class="mb-2"><strong>Q: 注文がキッチン画面に表示されない。</strong><br>A: お客様が注文を確定したか確認してください。また、キッチン画面のフィルター設定が「保留中」になっているか確認してください。</li>
-            <li class="mb-2"><strong>Q: メニューの変更がお客様の画面に反映されない。</strong><br>A: お客様のブラウザキャッシュが原因である可能性があります。お客様にブラウザをリロードしてもらうか、キャッシュをクリアするように案内してください。</li>
-        </ul>
-    </div>
-
-    <!-- ショートカットキー一覧 -->
-    <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-        <h2 class="text-xl font-semibold text-gray-700 mb-4">ショートカットキー (開発中)</h2>
-        <p class="text-gray-600">
-            現在、ショートカットキーは実装されていません。今後のアップデートで追加される予定です。
-        </p>
-        <!-- <ul class="list-disc list-inside ml-4 text-gray-600">
-            <li><kbd>Ctrl + D</kbd>: ダッシュボードへ移動</li>
-            <li><kbd>Ctrl + K</kbd>: キッチン管理へ移動</li>
-            <li><kbd>Ctrl + M</kbd>: メニュー管理へ移動</li>
-            <li><kbd>Ctrl + T</kbd>: テーブル管理へ移動</li>
-            <li><kbd>Ctrl + H</kbd>: 注文履歴へ移動</li>
-        </ul> -->
-    </div>
-
-    <!-- 検索機能 (ダミー) -->
-    <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-        <h2 class="text-xl font-semibold text-gray-700 mb-4">ガイド内検索</h2>
-        <div class="relative">
-            <input type="text" id="guide-search" placeholder="キーワードを入力して検索..." class="w-full p-3 pl-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary">
-            <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-        </div>
-        <div id="search-results" class="mt-4 text-gray-700">
-            <!-- 検索結果はJSで動的に表示 -->
-        </div>
-    </div>
-
-    <!-- プリント対応CSSの案内 -->
-    <div class="bg-white rounded-lg shadow-md p-6">
-        <h2 class="text-xl font-semibold text-gray-700 mb-4">印刷対応</h2>
-        <p class="text-gray-600 mb-4">
-            このページは印刷に適したレイアウトで表示されます。ブラウザの印刷機能（<kbd>Ctrl + P</kbd> または <kbd>Cmd + P</kbd>）をご利用ください。
-        </p>
-        <button onclick="window.print()" class="bg-primary text-white px-6 py-3 rounded-md hover:bg-primary-dark transition duration-300 flex items-center">
-            <i class="fas fa-print mr-2"></i> このページを印刷
-        </button>
-    </div>
-</div>
-
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // アコーディオン機能
-        document.querySelectorAll('[data-toggle="collapse"]').forEach(button => {
-            button.addEventListener('click', function() {
-                const targetId = this.dataset.target;
-                const targetElement = document.querySelector(targetId);
-                const icon = this.querySelector('i.fa-chevron-down');
-
-                if (targetElement.classList.contains('hidden')) {
-                    targetElement.classList.remove('hidden');
-                    targetElement.classList.add('animate-slide-down'); // アニメーションクラスを追加
-                    icon.classList.add('rotate-180');
-                } else {
-                    targetElement.classList.remove('animate-slide-down'); // アニメーションクラスを削除
-                    targetElement.classList.add('animate-slide-up'); // 逆アニメーションクラスを追加
-                    icon.classList.remove('rotate-180');
-                    // アニメーション完了後にhiddenを追加
-                    targetElement.addEventListener('animationend', function handler() {
-                        targetElement.classList.add('hidden');
-                        targetElement.classList.remove('animate-slide-up');
-                        targetElement.removeEventListener('animationend', handler);
-                    }, { once: true });
-                }
-            });
-        });
-
-        // 検索機能 (簡易的なクライアントサイド検索)
-        const searchInput = document.getElementById('guide-search');
-        const searchResultsDiv = document.getElementById('search-results');
-        const guideSections = document.querySelectorAll('#accordion-guide .collapse, .bg-white h2, .bg-white p, .bg-white li');
-
-        searchInput.addEventListener('input', function() {
-            const query = this.value.toLowerCase();
-            searchResultsDiv.innerHTML = ''; // Clear previous results
-
-            if (query.length < 2) {
-                searchResultsDiv.textContent = '2文字以上入力してください。';
-                return;
-            }
-
-            let resultsFound = false;
-            guideSections.forEach(section => {
-                const text = section.textContent.toLowerCase();
-                if (text.includes(query)) {
-                    const resultItem = document.createElement('div');
-                    resultItem.className = 'p-2 border-b border-gray-100 last:border-b-0';
-                    let previewText = section.textContent.substring(0, 150); // 冒頭150文字
-                    // マッチした部分をハイライト
-                    const regex = new RegExp(query, 'gi');
-                    previewText = previewText.replace(regex, match => `<span class="bg-yellow-200">${match}</span>`);
-
-                    resultItem.innerHTML = `<p class="font-semibold text-primary">${section.previousElementSibling ? section.previousElementSibling.querySelector('span').textContent : section.textContent.substring(0, 30)}...</p><p class="text-sm">${previewText}...</p>`;
-                    searchResultsDiv.appendChild(resultItem);
-                    resultsFound = true;
-                }
-            });
-
-            if (!resultsFound) {
-                searchResultsDiv.textContent = '該当する情報は見つかりませんでした。';
-            }
-        });
-    });
-</script>
-
+{% block extra_css %}
 <style>
-    /* アコーディオン開閉アニメーション */
-    @keyframes slideDown {
-        from { max-height: 0; opacity: 0; }
-        to { max-height: 500px; opacity: 1; } /* 適切な最大高さを設定 */
+    .page-container {
+        max-width: 800px;
+        margin: 0 auto;
     }
-    @keyframes slideUp {
-        from { max-height: 500px; opacity: 1; }
-        to { max-height: 0; opacity: 0; }
-    }
-    .animate-slide-down {
-        animation: slideDown 0.3s ease-out forwards;
-        overflow: hidden;
-    }
-    .animate-slide-up {
-        animation: slideUp 0.3s ease-out forwards;
-        overflow: hidden;
-    }
-    .collapse {
-        max-height: 0;
-        overflow: hidden;
-        transition: max-height 0.3s ease-out, opacity 0.3s ease-out;
-        opacity: 0;
-    }
-    .collapse.hidden {
-        display: none; /* アニメーション後完全に非表示にする */
-    }
-    .collapse:not(.hidden) {
-        max-height: 500px; /* 適切な最大高さを設定 */
-        opacity: 1;
-    }
-    .fa-chevron-down {
-        transition: transform 0.3s ease;
-    }
-    .fa-chevron-down.rotate-180 {
-        transform: rotate(180deg);
-    }
-
-    /* 印刷用CSS */
-    @media print {
-        body {
-            font-family: 'Inter', sans-serif;
-            color: #000;
-            background-color: #fff;
-        }
-        .container {
-            width: 100%;
-            padding: 0;
-            margin: 0;
-        }
-        nav, footer, .mb-8:last-of-type, button, input {
-            display: none !important; /* ナビゲーション、フッター、ボタン、検索ボックスなどを非表示 */
-        }
-        h1, h2, h3 {
-            color: #000 !important;
-        }
-        .bg-white, .bg-gray-50 {
-            box-shadow: none !important;
-            border: none !important;
-            background-color: #fff !important;
-        }
-        .text-primary, .text-secondary, .text-green-500, .text-red-500, .text-blue-500 {
-            color: #000 !important; /* 色を黒に統一 */
-        }
-        .collapse {
-            display: block !important; /* 全てのアコーディオンコンテンツを表示 */
-            max-height: none !important;
-            opacity: 1 !important;
-            overflow: visible !important;
-        }
-        .fa-chevron-down {
-            display: none !important; /* アコーディオンの矢印を非表示 */
-        }
-        ul.list-disc {
-            list-style-type: disc !important;
-            margin-left: 1.5em !important;
-        }
+    .card-header h2 {
+        font-size: 1.8rem;
+        margin-bottom: 0;
     }
 </style>
+{% endblock %}
+
+{% block content %}
+<div class="page-container">
+    <h1 class="mb-4" style="font-size: 2.5rem;">💁‍♀️ 案内管理</h1>
+
+    <div class="card">
+        <div class="card-header bg-transparent border-0 pt-3">
+            <h2>QRコード発行</h2>
+        </div>
+        <div class="card-body">
+            <p class="card-text text-muted">お客様をご案内するテーブル名と人数を入力して、QRコードを発行してください。</p>
+            <form id="guidance-form" class="row g-3 align-items-end">
+                <div class="col-12 col-md">
+                    <label for="table_name" class="form-label">テーブル名</label>
+                    <input type="text" id="table_name" name="table_name" class="form-control" placeholder="例: 5番テーブル" required>
+                </div>
+                <div class="col-12 col-md-4">
+                    <label for="guest_count" class="form-label">人数</label>
+                    <input type="number" id="guest_count" name="guest_count" class="form-control" value="1" min="1" required>
+                </div>
+                <div class="col-12 col-md-auto">
+                    <button type="submit" class="btn btn-primary w-100">発行</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 {% endblock %}
