@@ -543,6 +543,19 @@ def init_db_command():
         db.session.commit()
         print("データベースの初期化・更新が完了しました。")
 
+# デバッグ用：全ルートを表示
+@app.route('/debug/routes')
+@login_required
+def debug_routes():
+    routes = []
+    for rule in app.url_map.iter_rules():
+        routes.append({
+            'endpoint': rule.endpoint,
+            'methods': list(rule.methods),
+            'path': str(rule)
+        })
+    return jsonify(routes)
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)
 @app.route('/admin/analytics')
