@@ -43,6 +43,10 @@
             box-shadow: 0 4px 15px rgba(0,0,0,0.05);
             border-radius: 12px;
         }
+        .btn-primary { background-color: var(--color-primary); border-color: var(--color-primary); }
+        .navbar-brand-container { display: flex; align-items: center; }
+        #cooking-animation { width: 30px; height: 30px; margin-left: 8px; display: none; vertical-align: middle; }
+
         @media (max-width: 991.98px) {
             .navbar-collapse {
                 background-color: var(--color-background);
@@ -52,9 +56,18 @@
                 border-top: 1px solid #EAE0D5;
             }
         }
-        .btn-primary { background-color: var(--color-primary); border-color: var(--color-primary); }
-        .navbar-brand-container { display: flex; align-items: center; }
-        #cooking-animation { width: 30px; height: 30px; margin-left: 8px; display: none; vertical-align: middle; }
+        
+        @media (max-width: 767.98px) {
+            .navbar-brand {
+                font-size: 1.8rem;
+            }
+            .main-content {
+                padding: 0.8rem !important;
+            }
+            h1, .h1 {
+                font-size: 2rem;
+            }
+        }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
@@ -63,10 +76,8 @@
         <div class="container-fluid">
             <div class="navbar-brand-container">
                 {% set home_url = url_for('index') %}
-                {# お客様セッションがアクティブな場合は、お客様メニューへリンク #}
                 {% if session.get('table_id') %}
                     {% set home_url = url_for('table_menu', table_id=session.get('table_id')) %}
-                {# 管理者ログイン中の場合は、ダッシュボードへリンク #}
                 {% elif current_user.is_authenticated %}
                     {% set home_url = url_for('dashboard') %}
                 {% endif %}
@@ -81,7 +92,6 @@
 
             <div class="collapse navbar-collapse" id="navbarContent">
                 <ul class="navbar-nav ms-auto">
-                    {# 管理者としてログインしており、かつお客様セッションがアクティブでない場合のみ運営メニューを表示 #}
                     {% if current_user.is_authenticated and not session.get('table_id') %}
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('kitchen') }}">キッチン</a></li>
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard') }}">ダッシュボード</a></li>
@@ -95,10 +105,8 @@
                             </ul>
                         </li>
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('logout') }}">ログアウト</a></li>
-                    {# お客様セッションがアクティブだが管理者ではない場合 #}
                     {% elif session.get('table_id') %}
                          <li class="nav-item"><span class="navbar-text">ご注文ありがとうございます</span></li>
-                    {# 管理者でもお客様でもない場合 #}
                     {% else %}
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('login') }}">管理者ログイン</a></li>
                     {% endif %}
@@ -131,39 +139,35 @@
             let tapCount = 0;
             const requiredTaps = 10;
             let lastTapTime = 0;
-            const tapResetDelay = 1000; // Reset tap count if taps are too slow (e.g., 1 second between taps)
+            const tapResetDelay = 1000;
 
-            // イースターエッグのタップイベントリスナー
             animationElement.addEventListener('click', function() {
-                // アニメーションが表示されている場合のみタップをカウント
                 if (animationElement.style.display === 'inline-block') {
                     const currentTime = new Date().getTime();
                     if (currentTime - lastTapTime > tapResetDelay) {
-                        tapCount = 0; // タップが遅すぎたらカウントをリセット
+                        tapCount = 0;
                     }
                     tapCount++;
                     lastTapTime = currentTime;
                     console.log('Easter egg tap count:', tapCount);
 
                     if (tapCount >= requiredTaps) {
-                        tapCount = 0; // 次回のためにカウントをリセット
+                        tapCount = 0;
                         console.log('Easter egg activated! Redirecting to gallery...');
-                        window.location.href = '/gallery'; // ギャラリーページへリダイレクト
+                        window.location.href = '/gallery';
                     }
                 }
             });
-            
-            // ★★★ 修正箇所 ★★★
-            // アニメーションの画像を4枚に増やす
+
             const imageSources = [
                 "{{ url_for('static', filename='images/cooking_1.png') }}",
                 "{{ url_for('static', filename='images/cooking_2.png') }}",
                 "{{ url_for('static', filename='images/cooking_3.png') }}",
                 "{{ url_for('static', filename='images/cooking_4.png') }}"
             ];
-
             let currentFrame = 0;
             let animationInterval;
+
             function startAnimation() {
                 if (animationInterval) return;
                 animationInterval = setInterval(() => {
@@ -171,17 +175,21 @@
                     animationElement.src = imageSources[currentFrame];
                 }, 500);
             }
-            function stopAnimation() { clearInterval(animationInterval); animationInterval = null; }
+
+            function stopAnimation() {
+                clearInterval(animationInterval);
+                animationInterval = null;
+            }
+
             async function checkKitchenStatus() {
                 try {
                     const response = await fetch('/api/kitchen/status');
-                    // 認証エラーの場合もアニメーションを停止して非表示にする
                     if (response.status === 401) { 
                         stopAnimation(); 
                         animationElement.style.display = 'none'; 
                         return; 
                     }
-                    if (!response.ok) return; // その他のエラーは無視
+                    if (!response.ok) return;
                     
                     const data = await response.json();
                     if (data.cooking_active) { 
@@ -195,6 +203,7 @@
                     console.error('Failed to check kitchen status:', error); 
                 }
             }
+
             checkKitchenStatus();
             setInterval(checkKitchenStatus, 15000);
         });
