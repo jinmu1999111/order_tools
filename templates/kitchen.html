@@ -17,7 +17,6 @@
     }
     .order-card.status-pending { border-left-color: #FFB74D; }
     .order-card.status-preparing { border-left-color: #64B5F6; }
-    /* servedになったら非表示になるため、readyのスタイルは不要になる */
 </style>
 {% endblock %}
 
@@ -38,7 +37,7 @@
             <div>調理中</div>
         </div>
         <div class="col-6 col-md-3 stat-item">
-            <div class="stat-number" id="ready-count">--</div> {# 提供準備OKは画面から消えるので表示不要 #}
+            <div class="stat-number" id="ready-count">--</div>
             <div>提供準備OK</div>
         </div>
         <div class="col-6 col-md-3 stat-item">
@@ -48,23 +47,23 @@
     </div>
 
     <div class="orders-grid row" id="orders-grid">
-        </div>
+    </div>
     <div class="text-center p-5" id="empty-state" style="display: none;">
         <h3>現在の注文はありません</h3>
     </div>
 </div>
 
 <script>
-    // AudioContextの初期化
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    const audioContext = new AudioContext();
-
     let soundEnabled = true;
-    let knownOrderIds = new Set(); // 新規注文検知用
+    let knownOrderIds = new Set();
+
+    // ★★★ 修正箇所 ★★★
+    // 新しい通知音を読み込んでおく
+    const notificationSound = new Audio("{{ url_for('static', filename='sounds/notification.mp3') }}");
+    notificationSound.load(); // 事前に読み込む
 
     // 通知表示関数
     function showNotification(message, type = 'info') {
-        console.log(`${type}: ${message}`);
         const alertDiv = document.createElement('div');
         alertDiv.className = `alert alert-${type === 'error' ? 'danger' : 'info'} alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3`;
         alertDiv.style.zIndex = 9999;
@@ -88,15 +87,11 @@
             if (data.success) {
                 updateStats(data.stats);
                 
-                // ★★★ 修正箇所 ★★★
                 const currentOrderIds = new Set(data.orders.map(o => o.id));
-                // ページ読み込み時ではなく、実際に新しい注文が増えた時だけ通知する
                 const isNewOrder = [...currentOrderIds].some(id => !knownOrderIds.has(id));
                 
                 if (isNewOrder && knownOrderIds.size > 0) {
-                    // 視覚的な通知を追加
                     showNotification('新しい注文が入りました！', 'info');
-                    // サウンドを再生（設定が有効な場合）
                     if (soundEnabled) {
                         playSound();
                     }
@@ -176,28 +171,12 @@
         }
     }
     
-    // サウンドを再生
+    // ★★★ 修正箇所 ★★★
+    // サウンドを再生 (読み込んだ音声ファイルを再生)
     function playSound() {
-        if (audioContext.state === 'suspended') {
-            return;
-        }
-        try {
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-            
-            oscillator.type = 'sine';
-            oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
-            gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 0.5);
-            
-            oscillator.start(audioContext.currentTime);
-            oscillator.stop(audioContext.currentTime + 0.5);
-        } catch (e) {
-            console.error("Sound play failed", e);
-        }
+        // 再生が中断されないように、再生位置を先頭に戻す
+        notificationSound.currentTime = 0;
+        notificationSound.play().catch(e => console.error("音声の再生に失敗しました:", e));
     }
 
     // サウンドトグルボタンの処理
@@ -205,11 +184,10 @@
         soundEnabled = !soundEnabled;
         const icon = document.querySelector('#sound-toggle i');
         icon.className = soundEnabled ? 'bi bi-volume-up-fill' : 'bi bi-volume-mute-fill';
-
-        if (audioContext.state === 'suspended') {
-            audioContext.resume().then(() => {
-                console.log('AudioContext resumed!');
-            });
+        
+        // ユーザー操作によって初めて音声を再生可能にする（ブラウザの自動再生ポリシー対策）
+        if (soundEnabled) {
+            notificationSound.play().then(() => notificationSound.pause());
         }
     });
 
