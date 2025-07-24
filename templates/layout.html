@@ -54,7 +54,7 @@
         }
         .btn-primary { background-color: var(--color-primary); border-color: var(--color-primary); }
         .navbar-brand-container { display: flex; align-items: center; }
-        #cooking-animation { width: 60px; height: 60px; margin-left: 5px; display: none; vertical-align: middle; }
+        #cooking-animation { width: 30px; height: 30px; margin-left: 8px; display: none; vertical-align: middle; }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
@@ -63,10 +63,12 @@
         <div class="container-fluid">
             <div class="navbar-brand-container">
                 {% set home_url = url_for('index') %}
-                {% if current_user.is_authenticated %}
-                    {% set home_url = url_for('dashboard') %}
-                {% elif session.get('table_id') %}
+                {# お客様セッションがアクティブな場合は、お客様メニューへリンク #}
+                {% if session.get('table_id') %}
                     {% set home_url = url_for('table_menu', table_id=session.get('table_id')) %}
+                {# 管理者ログイン中の場合は、ダッシュボードへリンク #}
+                {% elif current_user.is_authenticated %}
+                    {% set home_url = url_for('dashboard') %}
                 {% endif %}
                 <a class="navbar-brand" href="{{ home_url }}">Moi</a>
                 
@@ -79,7 +81,8 @@
 
             <div class="collapse navbar-collapse" id="navbarContent">
                 <ul class="navbar-nav ms-auto">
-                    {% if current_user.is_authenticated %}
+                    {# 管理者としてログインしており、かつお客様セッションがアクティブでない場合のみ運営メニューを表示 #}
+                    {% if current_user.is_authenticated and not session.get('table_id') %}
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('kitchen') }}">キッチン</a></li>
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard') }}">ダッシュボード</a></li>
                         <li class="nav-item dropdown">
@@ -92,8 +95,10 @@
                             </ul>
                         </li>
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('logout') }}">ログアウト</a></li>
+                    {# お客様セッションがアクティブだが管理者ではない場合 #}
                     {% elif session.get('table_id') %}
                          <li class="nav-item"><span class="navbar-text">ご注文ありがとうございます</span></li>
+                    {# 管理者でもお客様でもない場合 #}
                     {% else %}
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('login') }}">管理者ログイン</a></li>
                     {% endif %}
