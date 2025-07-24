@@ -1,211 +1,415 @@
 {% extends 'layout.html' %}
-{% block title %}卓管理{% endblock %}
-{% block extra_css %}{% endblock %}
+{% block title %}メニュー管理{% endblock %}
+
+{% block extra_css %}
+<style>
+    .page-container { max-width: 1200px; margin: 0 auto; }
+    .card-header h2 { font-size: 1.8rem; margin-bottom: 0; }
+    .category-block {
+        margin-bottom: 2rem;
+        border: 1px solid #dee2e6;
+        border-radius: .375rem;
+        padding: 1rem;
+        background-color: #fff;
+        position: relative;
+    }
+    .category-title {
+        font-size: 1.5rem;
+        border-bottom: 2px solid var(--color-primary);
+        padding-bottom: 0.5rem;
+        margin-bottom: 1rem;
+        cursor: grab;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .category-delete-btn {
+        opacity: 0.7;
+        transition: opacity 0.3s ease;
+    }
+    .category-delete-btn:hover {
+        opacity: 1;
+    }
+    .sortable-item {
+        cursor: grab;
+        user-select: none;
+    }
+    .sortable-ghost {
+        background-color: #e8f0fe;
+        opacity: 0.8;
+    }
+    .category-sortable-ghost {
+        border: 2px dashed #0d6efd;
+        background-color: #f8f9fa;
+    }
+    
+    /* 一括追加用のスタイル */
+    .bulk-add-container {
+        max-height: 400px;
+        overflow-y: auto;
+        border: 1px solid #dee2e6;
+        border-radius: 0.375rem;
+        padding: 1rem;
+        background-color: #f8f9fa;
+    }
+    .bulk-item-row {
+        display: flex;
+        gap: 0.5rem;
+        margin-bottom: 0.5rem;
+        align-items: center;
+    }
+    .bulk-item-row input {
+        flex: 1;
+    }
+    .bulk-item-row .name-input {
+        flex: 3;
+    }
+    .bulk-item-row .price-input {
+        flex: 1;
+        max-width: 120px;
+    }
+    .bulk-item-row .category-input {
+        flex: 2;
+    }
+    .remove-row-btn {
+        flex-shrink: 0;
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="container" style="max-width: 1200px;">
-    <h1 class="mb-4" style="font-size: 2.5rem;">🪑 卓管理</h1>
+<div class="page-container">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <h1 class="mb-0">🍔 メニュー管理</h1>
+        <div class="d-flex gap-2">
+            <button class="btn btn-info" data-bs-toggle="modal" data-bs-target="#bulkAddModal">
+                <i class="bi bi-plus-square"></i> 一括追加
+            </button>
+            <button class="btn btn-success btn-lg" id="save-order-btn">
+                <i class="bi bi-check-lg"></i> すべての並び順を保存
+            </button>
+        </div>
+    </div>
+
     <div class="card mb-4">
+        <div class="card-header bg-transparent border-0 pt-3">
+            <h2>新しいメニューを追加</h2>
+        </div>
         <div class="card-body">
-            <form id="add-table-form" class="row g-2 align-items-end">
-                <div class="col"><input type="text" id="new_table_name" class="form-control" placeholder="新しいテーブル名" required></div>
-                <div class="col-auto"><button type="submit" class="btn btn-primary">追加</button></div>
+            <form id="add-menu-form" class="row g-3 align-items-end">
+                <div class="col-12 col-md-4">
+                    <label for="name" class="form-label">メニュー名</label>
+                    <input type="text" id="name" name="name" required class="form-control">
+                </div>
+                <div class="col-12 col-md-3">
+                    <label for="price" class="form-label">価格 (¥)</label>
+                    <input type="number" id="price" name="price" required min="0" class="form-control">
+                </div>
+                <div class="col-12 col-md-3">
+                    <label for="category" class="form-label">カテゴリ</label>
+                    <input type="text" id="category" name="category" required class="form-control">
+                </div>
+                <div class="col-12 col-md-2">
+                    <button type="submit" class="btn btn-primary w-100">追加</button>
+                </div>
             </form>
         </div>
     </div>
-    <div class="row" id="tables-grid">
-        {% for table in tables %}
-        <div class="col-md-6 col-lg-4 mb-4" id="table-card-{{ table.id }}">
-            <div class="card h-100">
-                <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0">{{ table.name }}</h5>
-                    <button type="button" class="btn-close" onclick="deleteTable({{ table.id }})"></button>
-                </div>
-                <div class="card-body text-center d-flex flex-column justify-content-center align-items-center">
-                    <div id="qrcode-{{ table.id }}" class="mb-2" style="min-height: 160px;"></div>
-                    <small class="text-muted" id="expiry-{{ table.id }}">
-                        {% if table.qr_token_expiry %}{{ table.qr_token_expiry.astimezone(JST).strftime('有効期限: %H:%M') }}{% endif %}
-                    </small>
-                </div>
-                <div class="card-footer bg-transparent">
-                    <div class="btn-group w-100">
-                        <button class="btn btn-sm btn-outline-secondary" onclick="refreshToken({{ table.id }})">更新</button>
-                        <button class="btn btn-sm btn-outline-secondary" onclick="enlargeQR('{{ table.name }}', '{{ table.active_qr_token if table.active_qr_token else 'None' }}')">拡大</button>
+
+    <div class="card">
+        <div class="card-header bg-transparent border-0 pt-3">
+            <h2>メニュー一覧 (カテゴリ・メニュー共にドラッグ＆ドロップで並び替え)</h2>
+        </div>
+        <div class="card-body" id="category-container">
+            {% for cat_data in categorized_items %}
+                <div class="category-block" data-category-id="{{ cat_data.category_obj.id }}">
+                    <div class="category-title">
+                        <span>{{ cat_data.category_obj.name }}</span>
+                        <button class="btn btn-sm btn-outline-danger category-delete-btn" 
+                                onclick="deleteCategory({{ cat_data.category_obj.id }}, '{{ cat_data.category_obj.name }}', {{ cat_data.item_list|length }})"
+                                title="カテゴリを削除">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50px;"></th>
+                                    <th>メニュー名</th>
+                                    <th>価格</th>
+                                    <th>表示状態</th>
+                                    <th class="text-end">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody class="sortable-list" id="category-list-{{ cat_data.category_obj.id }}">
+                                {% for item in cat_data.item_list %}
+                                <tr id="item-row-{{ item.id }}" data-id="{{ item.id }}" class="sortable-item">
+                                    <td><i class="bi bi-grip-vertical"></i></td>
+                                    <td>{{ item.name }}</td>
+                                    <td>¥{{ item.price | int }}</td>
+                                    <td>
+                                        <span class="badge {% if item.active %}bg-success{% else %}bg-secondary{% endif %}" id="active-badge-{{ item.id }}">
+                                            {% if item.active %}表示中{% else %}非表示{% endif %}
+                                        </span>
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="btn-group" role="group">
+                                            <button class="btn btn-sm btn-outline-secondary" onclick="toggleActive({{ item.id }})">切替</button>
+                                            <button class="btn btn-sm btn-outline-danger" onclick="deleteItem({{ item.id }})">削除</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
+            {% endfor %}
+            <div id="no-categories-message" class="text-center py-4 text-muted" style="display: {% if not categorized_items %}block{% else %}none{% endif %};">
+                <p>まだメニューがありません。追加してください。</p>
             </div>
         </div>
-        {% endfor %}
     </div>
 </div>
-<div class="modal fade" id="qr-modal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="qr-modal-title"></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body d-flex justify-content-center" id="qr-modal-body"></div></div></div></div>
+
+<!-- 一括追加モーダル -->
+<div class="modal fade" id="bulkAddModal" tabindex="-1" aria-labelledby="bulkAddModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="bulkAddModalLabel">メニューの一括追加</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <p class="mb-0">複数のメニューをまとめて追加できます。</p>
+                        <div>
+                            <button class="btn btn-sm btn-outline-primary" onclick="addBulkRow()">
+                                <i class="bi bi-plus"></i> 行を追加
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="clearBulkRows()">
+                                <i class="bi bi-trash"></i> 全クリア
+                            </button>
+                        </div>
+                    </div>
+                    <div class="bulk-add-container" id="bulk-container">
+                        <!-- JavaScript で動的に行が追加される -->
+                    </div>
+                </div>
+                <div class="text-muted small">
+                    <strong>ヒント:</strong>
+                    <ul class="mb-0">
+                        <li>同じカテゴリ名を入力すると自動的にグループ化されます</li>
+                        <li>空の行は無視されます</li>
+                        <li>価格は半角数字で入力してください</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                <button type="button" class="btn btn-primary" onclick="submitBulkAdd()" id="bulk-submit-btn">
+                    <i class="bi bi-check-lg"></i> 一括追加実行
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- カテゴリ削除確認モーダル -->
+<div class="modal fade" id="categoryDeleteModal" tabindex="-1" aria-labelledby="categoryDeleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="categoryDeleteModalLabel">カテゴリ削除確認</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="categoryDeleteBody">
+                <!-- JavaScript で内容が設定される -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
+                <button type="button" class="btn btn-danger" id="confirmCategoryDelete">削除実行</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
+
 {% block scripts %}
-<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 <script>
-    // APIエラーハンドリング関数
     const handleHttpError = async (response) => {
         if (response.status === 401) {
             alert('セッションが切れました。再度ログインしてください。');
             window.location.href = '/login';
             return true;
         }
-
-        console.error('API HTTPエラーレスポンス:', response);
+        
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        
         try {
             const errorData = await response.json();
-            console.error('API HTTPエラーデータ:', errorData);
-            alert(`エラー: ${errorData.message || 'サーバーエラーが発生しました。'}`);
+            errorMessage = errorData.message || errorMessage;
+            console.error('API Error Details:', errorData);
         } catch (e) {
-            console.error('HTTPエラーレスポンスのパース失敗:', e);
-            alert('ネットワークエラーまたは不明なエラーが発生しました。');
+            console.error('Failed to parse error response:', e);
         }
+        
+        alert(`エラー: ${errorMessage}`);
         return true;
     };
 
-    function generateQRCode(containerId, token, size = 150) {
-        const qrContainer = document.getElementById(containerId);
-        if (!qrContainer) {
-            console.error(`QR Code container not found: ${containerId}`);
+    // 一括追加関連の関数
+    let bulkRowCounter = 0;
+
+    function createBulkRow() {
+        bulkRowCounter++;
+        return `
+            <div class="bulk-item-row" id="bulk-row-${bulkRowCounter}">
+                <input type="text" class="form-control name-input" placeholder="メニュー名" required>
+                <input type="number" class="form-control price-input" placeholder="価格" min="0" required>
+                <input type="text" class="form-control category-input" placeholder="カテゴリ" required>
+                <button type="button" class="btn btn-sm btn-outline-danger remove-row-btn" onclick="removeBulkRow(${bulkRowCounter})">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        `;
+    }
+
+    function addBulkRow() {
+        const container = document.getElementById('bulk-container');
+        container.insertAdjacentHTML('beforeend', createBulkRow());
+    }
+
+    function removeBulkRow(id) {
+        const row = document.getElementById(`bulk-row-${id}`);
+        if (row) row.remove();
+    }
+
+    function clearBulkRows() {
+        document.getElementById('bulk-container').innerHTML = '';
+        bulkRowCounter = 0;
+    }
+
+    async function submitBulkAdd() {
+        const container = document.getElementById('bulk-container');
+        const rows = container.querySelectorAll('.bulk-item-row');
+        
+        if (rows.length === 0) {
+            alert('追加する項目がありません。');
             return;
         }
-        qrContainer.innerHTML = '';
-        if (token && token !== 'None') {
-            try {
-                new QRCode(qrContainer, { 
-                    text: `${window.location.origin}/qr/${token}`, 
-                    width: size, 
-                    height: size, 
-                    correctLevel: QRCode.CorrectLevel.H 
-                });
-                console.log(`QR Code generated for container: ${containerId}, token: ${token}`);
-            } catch (qrError) {
-                console.error(`Error generating QR Code for ${containerId} with token ${token}:`, qrError);
-                qrContainer.innerHTML = '<div class="text-muted small">QR生成エラー</div>';
+
+        const items = [];
+        let hasError = false;
+
+        rows.forEach((row, index) => {
+            const name = row.querySelector('.name-input').value.trim();
+            const price = row.querySelector('.price-input').value.trim();
+            const category = row.querySelector('.category-input').value.trim();
+
+            if (name && price && category) {
+                if (isNaN(price) || parseFloat(price) < 0) {
+                    alert(`${index + 1}行目: 価格は正の数値で入力してください。`);
+                    hasError = true;
+                    return;
+                }
+                items.push({ name, price: parseFloat(price), category });
             }
-        } else {
-            console.warn(`Attempted to generate QR with invalid token for container: ${containerId}. Token: ${token}`);
-            qrContainer.innerHTML = '<div class="text-muted small">QR未生成</div>';
+        });
+
+        if (hasError) return;
+
+        if (items.length === 0) {
+            alert('有効な項目がありません。必要な項目をすべて入力してください。');
+            return;
+        }
+
+        const btn = document.getElementById('bulk-submit-btn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 追加中...';
+
+        try {
+            let successCount = 0;
+            let errorCount = 0;
+
+            for (const item of items) {
+                try {
+                    const response = await fetch('/api/menu/add', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(item)
+                    });
+
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.success) {
+                            successCount++;
+                        } else {
+                            errorCount++;
+                            console.error(`Failed to add ${item.name}:`, data.message);
+                        }
+                    } else {
+                        errorCount++;
+                        await handleHttpError(response);
+                    }
+                } catch (error) {
+                    errorCount++;
+                    console.error(`Error adding ${item.name}:`, error);
+                }
+            }
+
+            if (successCount > 0) {
+                alert(`${successCount}件のメニューを追加しました。${errorCount > 0 ? `（${errorCount}件失敗）` : ''}\nページを更新します。`);
+                location.reload();
+            } else {
+                alert('メニューの追加に失敗しました。');
+            }
+
+        } catch (error) {
+            alert('一括追加処理中にエラーが発生しました。');
+            console.error('Bulk add error:', error);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check-lg"></i> 一括追加実行';
         }
     }
 
-    // 新しいテーブルカードを生成して追加する関数
-    function addTableCard(table) {
-        try {
-            const tablesGrid = document.getElementById('tables-grid');
-            if (!tablesGrid) {
-                console.error('Tables grid container #tables-grid not found.');
-                return;
-            }
-
-            const colDiv = document.createElement('div');
-            colDiv.className = 'col-md-6 col-lg-4 mb-4';
-            colDiv.id = `table-card-${table.id}`;
-
-            const expiryText = table.expiry ? `有効期限: ${new Date(table.expiry).toLocaleTimeString('ja-JP', {hour: '2-digit', minute:'2-digit'})}` : '';
-            const tokenForEnlarge = table.token ? `'${table.token}'` : `'None'`; 
-
-            colDiv.innerHTML = `
-                <div class="card h-100">
-                    <div class="card-header bg-transparent d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">${table.name}</h5>
-                        <button type="button" class="btn-close" onclick="deleteTable(${table.id})"></button>
-                    </div>
-                    <div class="card-body text-center d-flex flex-column justify-content-center align-items-center">
-                        <div id="qrcode-${table.id}" class="mb-2" style="min-height: 160px;"></div>
-                        <small class="text-muted" id="expiry-${table.id}">
-                            ${expiryText}
-                        </small>
-                    </div>
-                    <div class="card-footer bg-transparent">
-                        <div class="btn-group w-100">
-                            <button class="btn btn-sm btn-outline-secondary" onclick="refreshToken(${table.id})">更新</button>
-                            <button class="btn btn-sm btn-outline-secondary" onclick="enlargeQR('${table.name}', ${tokenForEnlarge})">拡大</button>
-                        </div>
-                    </div>
+    // カテゴリ削除関数
+    async function deleteCategory(categoryId, categoryName, itemCount) {
+        const modal = new bootstrap.Modal(document.getElementById('categoryDeleteModal'));
+        const body = document.getElementById('categoryDeleteBody');
+        
+        if (itemCount > 0) {
+            body.innerHTML = `
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i> 
+                    <strong>警告:</strong> カテゴリ「${categoryName}」には${itemCount}個のメニューが含まれています。
                 </div>
+                <p>このカテゴリを削除すると、含まれるすべてのメニューも削除されます。</p>
+                <p class="text-danger"><strong>この操作は取り消せません。本当に削除しますか？</strong></p>
             `;
-            tablesGrid.appendChild(colDiv);
-            console.log(`Table card for ${table.name} (ID: ${table.id}) appended to DOM.`);
-
-            generateQRCode(`qrcode-${table.id}`, table.token); 
-            console.log(`addTableCard completed for ${table.name} (ID: ${table.id}).`);
-
-        } catch (jsError) {
-            console.error(`Error in addTableCard for table ${table.name} (ID: ${table.id}):`, jsError);
-            alert('テーブルカードの追加中にエラーが発生しました。詳細はコンソールを確認してください。');
+        } else {
+            body.innerHTML = `
+                <p>カテゴリ「${categoryName}」を削除します。</p>
+                <p class="text-muted">このカテゴリにはメニューが含まれていません。</p>
+            `;
         }
+
+        document.getElementById('confirmCategoryDelete').onclick = async () => {
+            modal.hide();
+            await executeCategoryDelete(categoryId, categoryName);
+        };
+
+        modal.show();
     }
 
-    async function refreshToken(tableId) {
+    async function executeCategoryDelete(categoryId, categoryName) {
         try {
-            const response = await fetch(`/api/qr/generate/${tableId}`, { method: 'POST' });
-            if (!response.ok) {
-                await handleHttpError(response);
-                return;
-            }
-
-            const data = await response.json();
-            if (data.success) {
-                generateQRCode(`qrcode-${tableId}`, data.token);
-
-                // 日時をJSTでフォーマット
-                const expiryDate = new Date(data.expiry);
-                const expiryText = new Intl.DateTimeFormat('ja-JP', {
-                    timeZone: 'Asia/Tokyo',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                }).format(expiryDate);
-
-                document.getElementById(`expiry-${tableId}`).textContent = `有効期限: ${expiryText}`;
-                
-                const card = document.getElementById(`table-card-${tableId}`);
-                const tableName = card.querySelector('h5').textContent;
-                card.querySelector(`[onclick^="enlargeQR"]`).setAttribute('onclick', `enlargeQR('${tableName}', '${data.token}')`);
-                alert('QRコードを更新しました。');
-                console.log('QRコード更新成功:', data);
-            } else {
-                alert(data.message || 'QRコードの更新に失敗しました。');
-                console.error('QRコード更新失敗 (API論理エラー):', data);
-            }
-        } catch(error) { 
-            console.error('QRコード更新処理中に通信またはパースエラー:', error);
-            alert('QRコードの更新中に通信エラーまたは予期せぬエラーが発生しました。'); 
-        }
-    }
-
-    async function deleteTable(tableId) {
-        if (!confirm('本当にこのテーブルを削除しますか？')) return;
-        try {
-            const response = await fetch(`/api/tables/${tableId}`, { method: 'DELETE' });
-            if (!response.ok) {
-                await handleHttpError(response);
-                return;
-            }
-
-            const data = await response.json().catch(() => ({ success: true }));
-            if (data.success) {
-                document.getElementById(`table-card-${tableId}`).remove();
-                alert('テーブルを削除しました。');
-                console.log('テーブル削除成功:', tableId);
-            } else {
-                alert(data.message || 'テーブルの削除に失敗しました。');
-                console.error('テーブル削除失敗 (API論理エラー):', data);
-            }
-        } catch (error) { 
-            console.error('テーブル削除処理中に通信またはDOM操作エラー:', error);
-            alert('テーブルの削除中に通信エラーまたは予期せぬエラーが発生しました。'); 
-        }
-    }
-
-    document.getElementById('add-table-form').addEventListener('submit', async function(e) {
-        e.preventDefault();
-        console.log('「追加」フォームが送信されました。');
-        const name = document.getElementById('new_table_name').value;
-        try {
-            const response = await fetch('/api/tables', { 
-                method: 'POST', 
-                headers: { 'Content-Type': 'application/json' }, 
-                body: JSON.stringify({ name }) 
+            const response = await fetch(`/api/category/${categoryId}`, { 
+                method: 'DELETE' 
             });
             
             if (!response.ok) {
@@ -215,34 +419,325 @@
 
             const data = await response.json();
             if (data.success) {
-                alert('テーブルを追加しました。');
-                addTableCard(data);
-                document.getElementById('new_table_name').value = '';
-                console.log('テーブル追加成功:', data);
+                alert(`カテゴリ「${categoryName}」を削除しました。`);
+                location.reload();
             } else {
-                alert(data.message || 'テーブルの追加に失敗しました。');
-                console.error('テーブル追加失敗 (API論理エラー):', data);
+                alert(data.message || 'カテゴリの削除に失敗しました。');
             }
-        } catch (error) { 
-            console.error('テーブル追加処理中に通信またはパースエラー:', error);
-            alert('テーブルの追加中に通信エラーまたは予期せぬエラーが発生しました。'); 
+        } catch (error) {
+            alert('カテゴリの削除中にエラーが発生しました。');
+            console.error('Category delete error:', error);
         }
-    });
-
-    function enlargeQR(tableName, token) {
-        if (!token || token === 'None') { 
-            alert('先にQRコードを生成・更新してください。'); 
-            return; 
-        }
-        document.getElementById('qr-modal-title').textContent = `${tableName} QRコード`;
-        generateQRCode('qr-modal-body', token, 300);
-        new bootstrap.Modal(document.getElementById('qr-modal')).show();
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
-        {% for table in tables %}
-            generateQRCode('qrcode-{{ table.id }}', '{{ table.active_qr_token if table.active_qr_token else 'None' }}');
-        {% endfor %}
+    // 改良版メニュー削除関数
+    async function deleteItem(itemId) {
+        const itemRow = document.getElementById(`item-row-${itemId}`);
+        const itemName = itemRow ? itemRow.cells[1].textContent : 'unknown';
+        
+        if (!confirm(`メニュー「${itemName}」を削除しますか？\n\n注意: 注文履歴がある場合は非表示になります。`)) {
+            return;
+        }
+        
+        // ボタンを無効化してスピナーを表示
+        const deleteBtn = event.target;
+        const originalContent = deleteBtn.innerHTML;
+        deleteBtn.disabled = true;
+        deleteBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+        
+        try {
+            const response = await fetch(`/api/menu/${itemId}`, { 
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                if (response.status === 401) {
+                    alert('セッションが切れました。再度ログインしてください。');
+                    window.location.href = '/login';
+                    return;
+                }
+                
+                // サーバーエラーの詳細を取得
+                let errorMessage = 'サーバーエラーが発生しました。';
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.message || errorMessage;
+                } catch (e) {
+                    errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                }
+                
+                throw new Error(errorMessage);
+            }
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                if (data.action === 'deactivated') {
+                    // 非表示にされた場合
+                    showActionDialog(
+                        '非表示にしました',
+                        data.message,
+                        [
+                            {
+                                text: 'OK',
+                                class: 'btn-secondary',
+                                action: () => location.reload()
+                            },
+                            {
+                                text: '強制削除',
+                                class: 'btn-danger',
+                                action: () => forceDeleteItem(itemId, itemName)
+                            }
+                        ]
+                    );
+                } else {
+                    // 完全削除された場合
+                    alert(data.message);
+                    location.reload();
+                }
+            } else {
+                throw new Error(data.message || '削除に失敗しました。');
+            }
+            
+        } catch (error) {
+            console.error('Delete error:', error);
+            alert(`エラー: ${error.message}`);
+        } finally {
+            // ボタンを復元
+            deleteBtn.disabled = false;
+            deleteBtn.innerHTML = originalContent;
+        }
+    }
+
+    async function forceDeleteItem(itemId, itemName) {
+        if (!confirm(`本当にメニュー「${itemName}」を強制削除しますか？\n\n警告: 関連する注文履歴もすべて削除されます。この操作は取り消せません。`)) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/menu/${itemId}/force-delete`, { 
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                await handleHttpError(response);
+                return;
+            }
+            
+            const data = await response.json();
+            if (data.success) {
+                alert(data.message);
+                location.reload();
+            } else {
+                throw new Error(data.message || '強制削除に失敗しました。');
+            }
+            
+        } catch (error) {
+            console.error('Force delete error:', error);
+            alert(`強制削除エラー: ${error.message}`);
+        }
+    }
+
+    // アクションダイアログを表示する関数
+    function showActionDialog(title, message, buttons) {
+        // 既存のモーダルがあれば削除
+        const existingModal = document.getElementById('actionModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // ボタンHTMLを生成
+        const buttonHtml = buttons.map(btn => 
+            `<button type="button" class="btn ${btn.class}" data-action="${btn.text}">${btn.text}</button>`
+        ).join('');
+        
+        // モーダルHTML
+        const modalHtml = `
+            <div class="modal fade" id="actionModal" tabindex="-1" aria-labelledby="actionModalLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="actionModalLabel">${title}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p>${message}</p>
+                        </div>
+                        <div class="modal-footer">
+                            ${buttonHtml}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // モーダルをDOMに追加
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        const modal = new bootstrap.Modal(document.getElementById('actionModal'));
+        
+        // ボタンのイベントリスナーを追加
+        buttons.forEach(btn => {
+            const buttonElement = document.querySelector(`[data-action="${btn.text}"]`);
+            buttonElement.addEventListener('click', () => {
+                modal.hide();
+                if (btn.action) {
+                    btn.action();
+                }
+            });
+        });
+        
+        modal.show();
+        
+        // モーダルが閉じられたときにDOMから削除
+        document.getElementById('actionModal').addEventListener('hidden.bs.modal', function () {
+            this.remove();
+        });
+    }
+
+    // 初期化処理
+    document.addEventListener('DOMContentLoaded', function () {
+        // ソート機能の初期化
+        const categoryContainer = document.getElementById('category-container');
+        if (categoryContainer) {
+            new Sortable(categoryContainer, {
+                animation: 150,
+                handle: '.category-title span',
+                ghostClass: 'category-sortable-ghost',
+            });
+        }
+        document.querySelectorAll('.sortable-list').forEach(list => {
+            new Sortable(list, {
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                handle: '.bi-grip-vertical',
+            });
+        });
+
+        // 保存ボタンのイベントリスナー
+        document.getElementById('save-order-btn').addEventListener('click', async function() {
+            const btn = this;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 保存中...';
+            try {
+                const categoryBlocks = document.querySelectorAll('.category-block');
+                const categoryIds = Array.from(categoryBlocks).map(block => block.dataset.categoryId);
+                
+                const catResponse = await fetch('/api/category/order', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ category_ids: categoryIds })
+                });
+                if (!catResponse.ok) {
+                    await handleHttpError(catResponse);
+                    throw new Error('Category order save failed');
+                }
+
+                const allItems = document.querySelectorAll('.sortable-item');
+                const itemIds = Array.from(allItems).map(item => item.dataset.id);
+
+                const itemResponse = await fetch('/api/menu/order', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ item_ids: itemIds })
+                });
+
+                if (!itemResponse.ok) {
+                    await handleHttpError(itemResponse);
+                    throw new Error('Item order save failed');
+                }
+                
+                alert('すべての並び順を保存しました。');
+            } catch (error) {
+                console.error('保存処理中にエラーが発生:', error);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-check-lg"></i> すべての並び順を保存';
+            }
+        });
+
+        // 一括追加モーダルが開かれたときに初期行を作成
+        const bulkModal = document.getElementById('bulkAddModal');
+        bulkModal.addEventListener('shown.bs.modal', function () {
+            const container = document.getElementById('bulk-container');
+            if (container.children.length === 0) {
+                // 初期5行を作成
+                for (let i = 0; i < 5; i++) {
+                    addBulkRow();
+                }
+            }
+        });
+
+        // モーダルが閉じられたときにクリア
+        bulkModal.addEventListener('hidden.bs.modal', function () {
+            clearBulkRows();
+        });
     });
+    
+    // 単品追加フォーム
+    document.getElementById('add-menu-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const form = e.target;
+        const name = form.name.value;
+        const price = form.price.value;
+        const category = form.category.value;
+
+        try {
+            const response = await fetch('/api/menu/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, price, category })
+            });
+            
+            if (!response.ok) {
+                await handleHttpError(response);
+                return;
+            }
+
+            const data = await response.json();
+            if (data.success) {
+                alert('メニューを追加しました。ページを更新します。');
+                location.reload();
+            } else {
+                alert(data.message || '追加に失敗しました。');
+            }
+        } catch (error) {
+            alert('メニューの追加中にエラーが発生しました。');
+        }
+    });
+
+    // 表示/非表示切り替え
+    async function toggleActive(itemId) {
+        try {
+            const response = await fetch(`/api/menu/toggle/${itemId}`, { method: 'POST' });
+            if (!response.ok) {
+                await handleHttpError(response);
+                return;
+            }
+            const data = await response.json();
+            if (data.success) {
+                const activeBadge = document.getElementById(`active-badge-${itemId}`);
+                if (activeBadge) {
+                    if (data.active) {
+                        activeBadge.classList.replace('bg-secondary', 'bg-success');
+                        activeBadge.textContent = '表示中';
+                    } else {
+                        activeBadge.classList.replace('bg-success', 'bg-secondary');
+                        activeBadge.textContent = '非表示';
+                    }
+                }
+            } else {
+                alert(data.message || '状態の切り替えに失敗しました。');
+            }
+        } catch (error) {
+            alert('状態の切り替え中にエラーが発生しました。');
+        }
+    }
 </script>
 {% endblock %}
