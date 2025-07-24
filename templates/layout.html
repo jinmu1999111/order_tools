@@ -45,7 +45,7 @@
         }
         .btn-primary { background-color: var(--color-primary); border-color: var(--color-primary); }
         .navbar-brand-container { display: flex; align-items: center; }
-        #cooking-animation { width: 50px; height: 50px; margin-left: 5px; display: none; vertical-align: middle; }
+        #cooking-animation { width: 30px; height: 30px; margin-left: 8px; display: none; vertical-align: middle; }
 
         @media (max-width: 991.98px) {
             .navbar-collapse {
@@ -91,6 +91,8 @@
 
             <div class="collapse navbar-collapse" id="navbarContent">
                 <ul class="navbar-nav ms-auto">
+                    {# ★★★ 修正箇所 ★★★ #}
+                    {# 管理者としてログインしており、かつお客様セッションがアクティブでない場合のみ運営メニューを表示 #}
                     {% if current_user.is_authenticated and not session.get('table_id') %}
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('kitchen') }}">キッチン</a></li>
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard') }}">ダッシュボード</a></li>
@@ -104,9 +106,8 @@
                             </ul>
                         </li>
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('logout') }}">ログアウト</a></li>
-                    {% elif session.get('table_id') %}
-                         <li class="nav-item"><span class="navbar-text">ご注文ありがとうございます</span></li>
-                    {% else %}
+                    {# お客様でもなく、ログインもしていない場合のみログインリンクを表示 #}
+                    {% elif not current_user.is_authenticated and not session.get('table_id') %}
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('login') }}">管理者ログイン</a></li>
                     {% endif %}
                 </ul>
@@ -148,7 +149,6 @@
                     }
                     tapCount++;
                     lastTapTime = currentTime;
-                    console.log('Easter egg tap count:', tapCount);
                     if (tapCount >= requiredTaps) {
                         tapCount = 0;
                         window.location.href = '/gallery';
