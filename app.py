@@ -28,8 +28,11 @@ if not db_url:
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    'pool_recycle': 3600,  # PostgreSQL接続の改善
-    'pool_pre_ping': True
+    'pool_recycle': 280,   # Renderのタイムアウト(300秒)より短く設定
+    'pool_pre_ping': True, # 接続が有効か事前に確認する
+    'pool_size': 5,        # 保持する接続の数
+    'max_overflow': 2      # 一時的に許可する追加の接続数
+
 }
 app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(hours=8)
 
