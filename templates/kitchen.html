@@ -65,9 +65,8 @@
     // 通知表示関数
     function showNotification(message, type = 'info') {
         console.log(`${type}: ${message}`);
-        // Bootstrap alertを使った通知
         const alertDiv = document.createElement('div');
-        alertDiv.className = `alert alert-${type === 'error' ? 'danger' : type} alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3`;
+        alertDiv.className = `alert alert-${type === 'error' ? 'danger' : 'info'} alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3`;
         alertDiv.style.zIndex = 9999;
         alertDiv.innerHTML = `
             ${message}
@@ -83,19 +82,24 @@
             const response = await fetch('/api/kitchen/orders');
             if (!response.ok) {
                 console.error("Network error");
-                showNotification('ネットワークエラーが発生しました', 'error');
                 return;
             }
             const data = await response.json();
             if (data.success) {
                 updateStats(data.stats);
                 
-                // 新規注文の検知とサウンド再生
-                const currentOrderIds = new Set(data.orders.map(o => o.id)); // session_idからidに変更
+                // ★★★ 修正箇所 ★★★
+                const currentOrderIds = new Set(data.orders.map(o => o.id));
+                // ページ読み込み時ではなく、実際に新しい注文が増えた時だけ通知する
                 const isNewOrder = [...currentOrderIds].some(id => !knownOrderIds.has(id));
                 
-                if (isNewOrder && knownOrderIds.size > 0 && soundEnabled) {
-                    playSound();
+                if (isNewOrder && knownOrderIds.size > 0) {
+                    // 視覚的な通知を追加
+                    showNotification('新しい注文が入りました！', 'info');
+                    // サウンドを再生（設定が有効な場合）
+                    if (soundEnabled) {
+                        playSound();
+                    }
                 }
                 
                 knownOrderIds = currentOrderIds;
@@ -103,7 +107,6 @@
             }
         } catch (error) {
             console.error("Fetch error:", error);
-            showNotification('データの取得に失敗しました', 'error');
         }
     }
 
@@ -115,7 +118,6 @@
         document.getElementById('total-count').textContent = stats.total_orders || 0;
     }
 
-    // ★★★ 修正箇所 ★★★
     // 注文カードを描画
     function renderOrders(orders) {
         const grid = document.getElementById('orders-grid');
@@ -128,10 +130,8 @@
         }
         emptyState.style.display = 'none';
 
-        // 個別の注文アイテムをカードとして描画
         orders.forEach(order => {
             const card = document.createElement('div');
-            // よりコンパクトな表示にするためクラスを調整
             card.className = 'col-12 col-md-4 col-lg-3 mb-3'; 
             
             const actionButton = `<button class="btn btn-sm btn-success w-100" onclick="updateStatus(${order.id}, 'served')">完了</button>`;
@@ -154,7 +154,6 @@
         });
     }
 
-    // ★★★ 修正箇所 ★★★
     // 注文ステータスを更新
     async function updateStatus(orderId, newStatus) {
         try {
@@ -165,9 +164,8 @@
             });
             
             if (response.ok) {
-                if (soundEnabled) playSound();
                 showNotification('ステータスを更新しました', 'success');
-                fetchOrders(); // 画面を更新して完了したアイテムを消す
+                fetchOrders();
             } else {
                 const data = await response.json();
                 showNotification(data.message || 'ステータスの更新に失敗しました', 'error');
@@ -208,7 +206,6 @@
         const icon = document.querySelector('#sound-toggle i');
         icon.className = soundEnabled ? 'bi bi-volume-up-fill' : 'bi bi-volume-mute-fill';
 
-        // ユーザー操作によりAudioContextを有効化
         if (audioContext.state === 'suspended') {
             audioContext.resume().then(() => {
                 console.log('AudioContext resumed!');
