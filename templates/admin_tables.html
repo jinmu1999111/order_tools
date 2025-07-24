@@ -29,7 +29,13 @@
                             <td>{{ table.id }}</td>
                             <td>{{ table.name }}</td>
                             <td>
-                                <span class="badge bg-secondary">{{ table.status }}</span>
+                                {% if table.status == 'available' %}
+        			     <span class="badge bg-success">空席</span>
+    				{% elif table.status == 'occupied' %}
+        			    <span class="badge bg-danger">利用中</span>
+    				{% else %}
+        			    <span class="badge bg-secondary">{{ table.status }}</span>
+    				{% endif %}
                             </td>
                             <td>
                                 <button class="btn btn-sm btn-outline-secondary" onclick="generateQrCode({{ table.id }}, '{{ table.name }}')">

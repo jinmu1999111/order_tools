@@ -91,7 +91,7 @@ class Table(db.Model):
     name = db.Column(db.String(100), unique=True, nullable=False)
     status = db.Column(db.String(20), default='available')
     active_qr_token = db.Column(db.String(100), unique=True, nullable=True)
-    qr_token_expiry = db.Column(db.DateTime(timezone=True), nullable=True)
+    # qr_token_expiry = db.Column(db.DateTime(timezone=True), nullable=True)
     # QRコード固有のセッションID（テーブル単位で永続化）
     persistent_session_id = db.Column(db.String(100), nullable=True)
     # 最後にアクセスされた時刻
@@ -196,7 +196,7 @@ def qr_auth(token):
     
     # 通常のテーブルQRトークンの処理
     table = Table.query.filter_by(active_qr_token=token).first()
-    if table and (not table.qr_token_expiry or table.qr_token_expiry > datetime.datetime.now(JST)):
+    if table:
         # 既存の永続セッションIDを使用（なければ新規作成）
         if not table.persistent_session_id:
             table.persistent_session_id = secrets.token_hex(16)
@@ -477,15 +477,18 @@ def api_generate_guidance_qr():
 def api_generate_table_qr(table_id):
     table = db.session.get(Table, table_id)
     if not table: return jsonify(success=False, message="Table not found"), 404
-    table.active_qr_token = secrets.token_urlsafe(16)
-    table.qr_token_expiry = datetime.datetime.now(JST) + datetime.timedelta(hours=5)  # 5時間
+    
+    # トークンがなければ新規作成（初回のみ）
+    if not table.active_qr_token:
+        table.active_qr_token = secrets.token_urlsafe(16)
     
     # 永続セッションIDがなければ作成
     if not table.persistent_session_id:
         table.persistent_session_id = secrets.token_hex(16)
     
     db.session.commit()
-    return jsonify(success=True, token=table.active_qr_token, expiry=table.qr_token_expiry.isoformat())
+    # 毎回新しいトークンと有効期限を返すのではなく、保存されているトークンだけを返す
+    return jsonify(success=True, token=table.active_qr_token)
 
 @app.route('/api/tables', methods=['POST'])
 @login_required
