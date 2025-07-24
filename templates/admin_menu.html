@@ -112,23 +112,23 @@
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 
 <script>
-    // APIエラーハンドリング関数
-    const handleApiError = async (response) => {
-        // コンソールに詳細なエラーを出力
-        console.error('API Error Response:', response);
-        try {
-            const errorData = await response.json();
-            console.error('API Error Data:', errorData);
-            alert(`エラー: ${errorData.message || '不明なエラーが発生しました。'}`);
-        } catch (e) {
-            console.error('Failed to parse API error response or unknown error:', e);
-            alert('エラーが発生しました。');
-        }
-
+    // APIエラーハンドリング関数 (HTTPステータスがOKでない場合のみ呼び出す)
+    const handleHttpError = async (response) => {
+        // 401 Unauthorized の場合は、ログインページにリダイレクト
         if (response.status === 401) {
             alert('セッションが切れました。再度ログインしてください。');
             window.location.href = '/login';
             return true; // エラーが処理されたことを示す
+        }
+
+        console.error('API HTTPエラーレスポンス:', response);
+        try {
+            const errorData = await response.json();
+            console.error('API HTTPエラーデータ:', errorData);
+            alert(`エラー: ${errorData.message || 'サーバーエラーが発生しました。'}`);
+        } catch (e) {
+            console.error('HTTPエラーレスポンスのパース失敗、またはネットワークエラー:', e);
+            alert('ネットワークエラーまたは不明なエラーが発生しました。');
         }
         return true; // エラーが処理されたことを示す
     };
@@ -156,19 +156,24 @@
                     body: JSON.stringify({ item_ids: itemIds })
                 });
 
-                if (await handleApiError(response)) return; 
+                // HTTPステータスがOKでない場合はエラーハンドラーを呼び出す
+                if (!response.ok) {
+                    await handleHttpError(response);
+                    return; // 処理を中断
+                }
                 
                 const data = await response.json();
-                if (response.ok && data.success) {
+                if (data.success) {
                     alert('メニューの並び順を保存しました。');
                     console.log('並び順保存成功:', data);
                 } else {
+                    // バックエンドが200 OKを返したが、論理的なエラーの場合
                     alert(data.message || '並び順の保存に失敗しました。');
-                    console.error('並び順保存失敗:', data);
+                    console.error('並び順保存失敗 (API論理エラー):', data);
                 }
             } catch (error) {
-                console.error('並び順保存処理中にエラー:', error);
-                alert('並び順の保存中にエラーが発生しました。');
+                console.error('並び順保存処理中に通信またはパースエラー:', error);
+                alert('並び順の保存中に通信エラーまたは予期せぬエラーが発生しました。');
             }
         });
     });
@@ -235,9 +240,9 @@
                 </td>
             `;
             categoryTbody.appendChild(row);
-            console.log(`メニューアイテム "${item.name}" がDOMに追加されました。`);
+            console.log(`メニューアイテム "${item.name}" (ID: ${item.item_id}) がDOMに追加されました。`);
         } catch (e) {
-            console.error('addMenuItemToDOM 関数内でエラーが発生しました:', e);
+            console.error('addMenuItemToDOM 関数内でDOM操作エラーが発生しました:', e);
             alert('メニューアイテムのDOM追加中にエラーが発生しました。');
         }
     }
@@ -257,21 +262,26 @@
                 body: JSON.stringify({ name, price, category })
             });
             
-            if (await handleApiError(response)) return;
+            // HTTPステータスがOKでない場合はエラーハンドラーを呼び出す
+            if (!response.ok) {
+                await handleHttpError(response);
+                return; // 処理を中断
+            }
 
             const data = await response.json();
-            if (response.ok && data.success) {
+            if (data.success) {
                 alert('メニューを追加しました。');
                 addMenuItemToDOM(data); // ページリロードなしで追加
                 form.reset(); // フォームをクリア
                 console.log('メニュー追加成功:', data);
             } else {
+                // バックエンドが200 OKを返したが、論理的なエラーの場合
                 alert(data.message || '追加に失敗しました。');
-                console.error('メニュー追加失敗:', data);
+                console.error('メニュー追加失敗 (API論理エラー):', data);
             }
         } catch (error) {
-            console.error('メニュー追加処理中にエラー:', error);
-            alert('メニューの追加中にエラーが発生しました。');
+            console.error('メニュー追加処理中に通信またはパースエラー:', error);
+            alert('メニューの追加中に通信エラーまたは予期せぬエラーが発生しました。');
         }
     });
 
@@ -281,9 +291,14 @@
         
         try {
             const response = await fetch(`/api/menu/${itemId}`, { method: 'DELETE' });
-            if (await handleApiError(response)) return;
+            
+            // HTTPステータスがOKでない場合はエラーハンドラーを呼び出す
+            if (!response.ok) {
+                await handleHttpError(response);
+                return; // 処理を中断
+            }
 
-            if (response.ok) {
+            if (response.ok) { // DELETEは通常成功時にdataを返さないことがあるため、response.okで判断
                 const rowEl = document.getElementById(`item-row-${itemId}`);
                 if (rowEl) {
                     rowEl.remove(); // DOMから削除
@@ -303,13 +318,13 @@
                     document.getElementById('no-categories-message').style.display = 'block';
                     console.log('全てのメニューが削除されたため、「メニューなし」メッセージを表示しました。');
                 }
-            } else {
-                alert('削除に失敗しました。');
-                console.error('メニュー削除失敗:', response);
+            } else { // 基本的にこのelseには入らないはず (response.okでチェックしているため)
+                 alert('削除に失敗しました。');
+                 console.error('メニュー削除失敗: ', response);
             }
         } catch (error) {
-            console.error('メニュー削除処理中にエラー:', error);
-            alert('メニューの削除中にエラーが発生しました。');
+            console.error('メニュー削除処理中に通信またはDOM操作エラー:', error);
+            alert('メニューの削除中に通信エラーまたは予期せぬエラーが発生しました。');
         }
     }
 
@@ -317,10 +332,15 @@
         console.log(`アイテムID ${itemId} の表示状態切り替えがリクエストされました。`);
         try {
             const response = await fetch(`/api/menu/toggle/${itemId}`, { method: 'POST' });
-            if (await handleApiError(response)) return;
+            
+            // HTTPステータスがOKでない場合はエラーハンドラーを呼び出す
+            if (!response.ok) {
+                await handleHttpError(response);
+                return; // 処理を中断
+            }
 
             const data = await response.json();
-            if (response.ok && data.success) {
+            if (data.success) {
                 const activeBadge = document.getElementById(`active-badge-${itemId}`);
                 if (activeBadge) {
                     if (data.active) {
@@ -334,13 +354,13 @@
                 }
                 alert('表示状態を切り替えました。');
             } else {
+                // バックエンドが200 OKを返したが、論理的なエラーの場合
                 alert(data.message || '状態の切り替えに失敗しました。');
-                console.error('表示状態切り替え失敗:', data);
+                console.error('表示状態切り替え失敗 (API論理エラー):', data);
             }
         } catch (error) {
-            console.error('表示状態切り替え処理中にエラー:', error);
-            alert('状態の切り替え中にエラーが発生しました。');
+            console.error('表示状態切り替え処理中に通信またはパースエラー:', error);
+            alert('状態の切り替え中に通信エラーまたは予期せぬエラーが発生しました。');
         }
     }
 </script>
-{% endblock %}
