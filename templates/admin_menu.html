@@ -298,7 +298,10 @@
                 return; // 処理を中断
             }
 
-            if (response.ok) { // DELETEは通常成功時にdataを返さないことがあるため、response.okで判断
+            // DELETEは通常成功時にdataを返さないことがあるため、response.okで判断
+            // ここに到達した時点でresponse.okはtrue
+            const data = await response.json().catch(() => ({ success: true })); // JSONがない場合も考慮
+            if (data.success) {
                 const rowEl = document.getElementById(`item-row-${itemId}`);
                 if (rowEl) {
                     rowEl.remove(); // DOMから削除
@@ -318,9 +321,9 @@
                     document.getElementById('no-categories-message').style.display = 'block';
                     console.log('全てのメニューが削除されたため、「メニューなし」メッセージを表示しました。');
                 }
-            } else { // 基本的にこのelseには入らないはず (response.okでチェックしているため)
-                 alert('削除に失敗しました。');
-                 console.error('メニュー削除失敗: ', response);
+            } else { // バックエンドが200 OKを返したが、論理的なエラーの場合
+                 alert(data.message || '削除に失敗しました。');
+                 console.error('メニュー削除失敗 (API論理エラー): ', data);
             }
         } catch (error) {
             console.error('メニュー削除処理中に通信またはDOM操作エラー:', error);
