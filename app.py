@@ -323,46 +323,22 @@ def api_customer_orders():
 @app.route('/api/kitchen/orders')
 @login_required
 def api_kitchen_orders():
+    # ★★★ 修正箇所 ★★★
     # 表示する注文ステータスをpendingとpreparingに限定
     orders_query = Order.query.filter(
-        and_(Order.status.in_(['pending', 'preparing']))
+        Order.status.in_(['pending', 'preparing'])
     ).order_by(Order.timestamp.asc()).all()
 
-    # セッションIDごとに注文をグループ化
-    orders_by_session = defaultdict(list)
-    for o in orders_query:
-        orders_by_session[o.session_id].append(o)
-
-    output = []
-    for session_id, orders in orders_by_session.items():
-        if not orders:
-            continue
-
-        # セッション内の全注文アイテムをカウント
-        item_counts = defaultdict(int)
-        for item in orders:
-            item_counts[item.item_name] += 1
-
-        # そのセッションの「最も進んだ」ステータスを決定
-        current_status = 'pending'
-        if any(o.status == 'preparing' for o in orders):
-            current_status = 'preparing'
-
-        output.append({
-            'id': orders[0].id,
-            'session_id': session_id,
-            'table_number': orders[0].table.name,
-            'created_at': orders[0].timestamp.isoformat(),
-            'status': current_status,
-            'items': [{'name': name, 'quantity': qty} for name, qty in item_counts.items()]
-        })
-
-    # 表示順序を調整 (pending -> preparing)
-    output.sort(key=lambda x: (
-        0 if x['status'] == 'pending' else
-        1 if x['status'] == 'preparing' else 2, # 他のステータスは表示されないが、念のため
-        x['created_at']
-    ))
+    # 個別の注文として返す
+    output = [
+        {
+            'id': o.id,
+            'table_name': o.table.name,
+            'item_name': o.item_name,
+            'status': o.status,
+            'timestamp': o.timestamp.isoformat()
+        } for o in orders_query
+    ]
 
     # 各ステータスごとの注文数を計算
     pending_orders_count = Order.query.filter_by(status='pending').count()
@@ -382,25 +358,27 @@ def api_kitchen_orders():
 
     return jsonify(success=True, orders=output, stats=stats)
 
+
 @app.route('/api/kitchen/orders/<int:order_id>/status', methods=['PUT'])
 @login_required
 def update_order_status(order_id):
     data = request.json
     new_status = data.get('status')
-
     order_to_update = db.session.get(Order, order_id)
 
     if not order_to_update:
         return jsonify(success=False, message="注文が見つかりません。"), 404
 
-    # 関連する同じセッションIDのすべての注文のステータスを更新
-    orders_in_session = Order.query.filter_by(session_id=order_to_update.session_id).all()
-
-    for order in orders_in_session:
-        if new_status == 'preparing' and order.status == 'pending':
-            order.status = new_status
-        elif new_status == 'served' and (order.status == 'preparing' or order.status == 'pending'): # pendingからも直接servedに変更できるようにする
-            order.status = new_status
+    # ★★★ 修正箇所 ★★★
+    # 単一の注文ステータスのみを更新
+    if new_status == 'preparing' and order_to_update.status == 'pending':
+        order_to_update.status = new_status
+    # pendingまたはpreparingから直接served（完了）に変更
+    elif new_status == 'served' and order_to_update.status in ['pending', 'preparing']:
+        order_to_update.status = new_status
+    else:
+        # 不正なステータス変更を防ぐ
+        return jsonify(success=False, message="許可されていないステータス変更です。"), 400
 
     db.session.commit()
     return jsonify(success=True, message=f"注文ステータスを {new_status} に更新しました。")
