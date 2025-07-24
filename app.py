@@ -838,4 +838,5 @@ if __name__ == '__main__':
     # このブロックは `python app.py` と直接実行された時だけ動く
     init_database()
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)
+
 # `else` ブロックは完全に削除します
