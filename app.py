@@ -499,11 +499,12 @@ def api_add_table():
     if Table.query.filter_by(name=name).first(): return jsonify(success=False, message='Table name already exists'), 400
     new_table = Table(name=name)
     new_table.active_qr_token = secrets.token_urlsafe(16)
-    new_table.qr_token_expiry = datetime.datetime.now(JST) + datetime.timedelta(hours=5)  # 5時間
+    # new_table.qr_token_expiry = ... の行を削除しました
     new_table.persistent_session_id = secrets.token_hex(16)  # 永続セッションID追加
     db.session.add(new_table)
     db.session.commit()
-    return jsonify(success=True, id=new_table.id, name=new_table.name, token=new_table.active_qr_token, expiry=new_table.qr_token_expiry.isoformat())
+    # expiry=... の部分を削除しました
+    return jsonify(success=True, id=new_table.id, name=new_table.name, token=new_table.active_qr_token)
 
 @app.route('/api/tables/<int:table_id>', methods=['DELETE'])
 @login_required
