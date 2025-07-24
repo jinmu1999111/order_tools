@@ -363,6 +363,12 @@ def submit_order():
     if not all([table_id, persistent_session_id, items]): 
         return jsonify(success=False, message="セッション情報が無効です。"), 400
     
+# 注文を処理する前に、テーブルが存在するか確認する
+    table = db.session.get(Table, table_id)
+    if not table:
+        session.clear()  # 無効なセッション情報をクリアする
+        return jsonify(success=False, message="このテーブルは現在ご利用いただけません。お手数ですが、再度QRコードを読み取ってください。"), 400
+
     for item_id, item_data in items.items():
         menu_item = db.session.get(MenuItem, int(item_id))
         if menu_item and item_data.get('quantity', 0) > 0:
