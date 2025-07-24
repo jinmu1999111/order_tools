@@ -90,7 +90,6 @@
     {% include '_menu_category.html' %}
 </div>
 
-<!-- フローティングボタン -->
 <div class="floating-buttons">
     <button class="floating-btn btn" data-bs-toggle="modal" data-bs-target="#historyModal" onclick="fetchOrderHistory()">
         <i class="bi bi-receipt"></i>
@@ -101,7 +100,6 @@
     </button>
 </div>
 
-<!-- カートサイドバー -->
 <div class="offcanvas offcanvas-end" tabindex="-1" id="cart-sidebar" aria-labelledby="cart-sidebar-label">
     <div class="offcanvas-header border-bottom">
         <h5 class="offcanvas-title" id="cart-sidebar-label">ご注文内容</h5>
@@ -116,7 +114,6 @@
     </div>
 </div>
 
-<!-- 注文履歴モーダル -->
 <div class="modal fade" id="historyModal" tabindex="-1" aria-labelledby="historyModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-scrollable">
         <div class="modal-content">
@@ -328,7 +325,7 @@
         }
     }
 
-    // 通知表示
+    // 通知表示 (表示時間を短縮)
     function showNotification(message) {
         const toast = document.createElement('div');
         toast.className = 'toast position-fixed bottom-0 end-0 m-3';
@@ -339,7 +336,8 @@
             </div>
         `;
         document.body.appendChild(toast);
-        const bsToast = new bootstrap.Toast(toast);
+        // autohideを有効にし、delayを短く設定
+        const bsToast = new bootstrap.Toast(toast, { autohide: true, delay: 2000 }); // 2秒後に自動的に非表示
         bsToast.show();
         toast.addEventListener('hidden.bs.toast', () => toast.remove());
     }

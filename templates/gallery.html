@@ -1,0 +1,42 @@
+{% extends "layout.html" %}
+{% block title %}画像ギャラリー{% endblock %}
+
+{% block extra_css %}
+<style>
+    .gallery-container {
+        padding-top: 2rem;
+    }
+    .gallery-item {
+        margin-bottom: 1.5rem;
+    }
+    .gallery-item img {
+        max-width: 100%;
+        height: auto;
+        border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .gallery-heading {
+        font-size: 3rem;
+        margin-bottom: 2rem;
+        text-align: center;
+        color: var(--color-text);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container gallery-container">
+    <h1 class="gallery-heading">🖼️ モチーフ犬「ゆうた」の画像ギャラリー</h1>
+    <div class="row justify-content-center">
+        {% for i in range(1, 6) %}
+        <div class="col-12 col-sm-6 col-md-4 col-lg-3 gallery-item">
+            <img src="{{ url_for('static', filename='images/gallery_photo' + i|string + '.jpg') }}" 
+                 alt="ギャラリー画像{{ i }}" loading="lazy">
+        </div>
+        {% endfor %}
+    </div>
+    <div class="text-center mt-4">
+        <a href="{{ url_for('index') }}" class="btn btn-primary">ホームに戻る</a>
+    </div>
+</div>
+{% endblock %}

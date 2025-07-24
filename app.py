@@ -181,19 +181,19 @@ def logout():
 def kitchen():
     # 初期統計データを計算 (ここではまだ全てのステータスを計算)
     today_start = datetime.datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)
-    
+
     pending_orders = Order.query.filter_by(status='pending').count()
     preparing_orders = Order.query.filter_by(status='preparing').count()
     ready_orders = Order.query.filter_by(status='ready').count() # readyもカウントはするが、表示はしない
     total_orders = Order.query.filter(Order.timestamp >= today_start).count()
-    
+
     stats = {
         'pending_orders': pending_orders,
         'preparing_orders': preparing_orders,
         'ready_orders': ready_orders, # frontendで表示しないようにする
         'total_orders': total_orders
     }
-    
+
     return render_template('kitchen.html', stats=stats)
 
 
@@ -202,7 +202,7 @@ def kitchen():
 def dashboard():
     # 初期統計データを計算
     today_start = datetime.datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)
-    
+
     # 今日の統計
     sales_query = db.session.query(
         func.sum(Order.item_price), 
@@ -214,7 +214,7 @@ def dashboard():
     today_sales, today_orders = sales_query.one()
     today_sales = today_sales or 0
     today_orders = today_orders or 0
-    
+
     # 初期値を渡す
     stats = {
         'today_sales': today_sales,
@@ -223,7 +223,7 @@ def dashboard():
         'occupied_tables': Table.query.filter_by(status='occupied').count(),
         'total_tables': Table.query.count()
     }
-    
+
     return render_template('dashboard.html', stats=stats)
 
 @app.route('/admin/menu')
@@ -257,16 +257,16 @@ def admin_guidance():
 def admin_analytics():
     """売上統計ページ"""
     today_start = datetime.datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)
-    
+
     today_orders = Order.query.filter(
         Order.timestamp >= today_start
     ).count()
-    
+
     today_revenue = db.session.query(func.sum(Order.item_price)).filter(
         Order.timestamp >= today_start,
         Order.status != 'cancelled'
     ).scalar() or 0
-    
+
     # 人気メニューの取得
     popular_items_query = db.session.query(
         Order.item_name, 
@@ -275,12 +275,12 @@ def admin_analytics():
         Order.timestamp >= today_start,
         Order.status != 'cancelled'
     ).group_by(Order.item_name).order_by(desc('total_quantity')).limit(5).all()
-    
+
     popular_items = [
         {'item_name': name, 'total_quantity': count} 
         for name, count in popular_items_query
     ]
-    
+
     return render_template('admin_analytics.html', 
                          today_orders=today_orders,
                          today_revenue=today_revenue,
@@ -327,22 +327,22 @@ def api_kitchen_orders():
     orders_query = Order.query.filter(
         and_(Order.status.in_(['pending', 'preparing']))
     ).order_by(Order.timestamp.asc()).all()
-    
+
     # セッションIDごとに注文をグループ化
     orders_by_session = defaultdict(list)
     for o in orders_query:
         orders_by_session[o.session_id].append(o)
-    
+
     output = []
     for session_id, orders in orders_by_session.items():
         if not orders:
             continue
-        
+
         # セッション内の全注文アイテムをカウント
         item_counts = defaultdict(int)
         for item in orders:
             item_counts[item.item_name] += 1
-            
+
         # そのセッションの「最も進んだ」ステータスを決定
         current_status = 'pending'
         if any(o.status == 'preparing' for o in orders):
@@ -389,19 +389,19 @@ def update_order_status(order_id):
     new_status = data.get('status')
 
     order_to_update = db.session.get(Order, order_id)
-    
+
     if not order_to_update:
         return jsonify(success=False, message="注文が見つかりません。"), 404
 
     # 関連する同じセッションIDのすべての注文のステータスを更新
     orders_in_session = Order.query.filter_by(session_id=order_to_update.session_id).all()
-    
+
     for order in orders_in_session:
         if new_status == 'preparing' and order.status == 'pending':
             order.status = new_status
-        elif new_status == 'served' and order.status == 'preparing': # preparing -> served に変更
+        elif new_status == 'served' and (order.status == 'preparing' or order.status == 'pending'): # pendingからも直接servedに変更できるようにする
             order.status = new_status
-    
+
     db.session.commit()
     return jsonify(success=True, message=f"注文ステータスを {new_status} に更新しました。")
 
@@ -501,7 +501,7 @@ def update_menu_order():
     if not item_ids: return jsonify(success=False, message="No item IDs provided"), 400
     try:
         items_map = {item.id: item for item in MenuItem.query.filter(MenuItem.id.in_(item_ids)).all()}
-        
+
         for index, item_id_str in enumerate(item_ids):
             item_id = int(item_id_str)
             item = items_map.get(item_id)
@@ -591,6 +591,12 @@ def api_kitchen_status():
     q = Order.query.filter(Order.status.in_(['pending', 'preparing']))
     is_cooking = db.session.query(q.exists()).scalar()
     return jsonify({'cooking_active': is_cooking})
+
+# --- ギャラリールートの追加 ---
+@app.route('/gallery')
+def gallery():
+    # ここに画像ギャラリーのコンテンツを実装します
+    return render_template('gallery.html')
 
 # --- エラーハンドラー ---
 @app.errorhandler(404)
