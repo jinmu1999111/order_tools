@@ -114,18 +114,23 @@
 <script>
     // APIエラーハンドリング関数
     const handleApiError = async (response) => {
+        // コンソールに詳細なエラーを出力
+        console.error('API Error Response:', response);
+        try {
+            const errorData = await response.json();
+            console.error('API Error Data:', errorData);
+            alert(`エラー: ${errorData.message || '不明なエラーが発生しました。'}`);
+        } catch (e) {
+            console.error('Failed to parse API error response or unknown error:', e);
+            alert('エラーが発生しました。');
+        }
+
         if (response.status === 401) {
             alert('セッションが切れました。再度ログインしてください。');
             window.location.href = '/login';
-            return true;
+            return true; // エラーが処理されたことを示す
         }
-        try {
-            const errorData = await response.json();
-            alert(`エラー: ${errorData.message || '不明なエラーが発生しました。'}`);
-        } catch (e) {
-            alert('エラーが発生しました。');
-        }
-        return true;
+        return true; // エラーが処理されたことを示す
     };
 
     document.addEventListener('DOMContentLoaded', function () {
@@ -140,159 +145,201 @@
 
         // 「並び順を保存」ボタンの処理
         document.getElementById('save-order-btn').addEventListener('click', async function() {
+            console.log('「並び順を保存」ボタンがクリックされました。');
             const allItems = document.querySelectorAll('.sortable-item');
             const itemIds = Array.from(allItems).map(item => item.dataset.id);
 
-            const response = await fetch('/api/menu/order', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ item_ids: itemIds })
-            });
+            try {
+                const response = await fetch('/api/menu/order', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ item_ids: itemIds })
+                });
 
-            if (await handleApiError(response)) return; // エラーハンドリング
-            
-            const data = await response.json();
-            if (response.ok && data.success) {
-                alert('メニューの並び順を保存しました。');
-            } else {
-                alert(data.message || '並び順の保存に失敗しました。');
+                if (await handleApiError(response)) return; 
+                
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    alert('メニューの並び順を保存しました。');
+                    console.log('並び順保存成功:', data);
+                } else {
+                    alert(data.message || '並び順の保存に失敗しました。');
+                    console.error('並び順保存失敗:', data);
+                }
+            } catch (error) {
+                console.error('並び順保存処理中にエラー:', error);
+                alert('並び順の保存中にエラーが発生しました。');
             }
         });
     });
 
     // 新しいメニュー項目をDOMに追加するヘルパー関数
     function addMenuItemToDOM(item) {
-        let categoryTbody = document.getElementById(`category-${encodeURIComponent(item.category)}`);
-        if (!categoryTbody) {
-            // 新しいカテゴリブロックを作成する必要がある場合
-            const cardBody = document.querySelector('.card-body');
-            const newCategoryBlock = document.createElement('div');
-            newCategoryBlock.className = 'category-block';
-            newCategoryBlock.innerHTML = `
-                <h3 class="category-title">${item.category}</h3>
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle">
-                        <thead>
-                            <tr>
-                                <th style="width: 50px;"></th>
-                                <th>メニュー名</th>
-                                <th>価格</th>
-                                <th>表示状態</th>
-                                <th class="text-end">操作</th>
-                            </tr>
-                        </thead>
-                        <tbody class="sortable-list" id="category-${encodeURIComponent(item.category)}">
-                        </tbody>
-                    </table>
-                </div>
-            `;
-            cardBody.insertBefore(newCategoryBlock, document.getElementById('no-categories-message'));
-            categoryTbody = document.getElementById(`category-${encodeURIComponent(item.category)}`);
-            new Sortable(categoryTbody, { // 新しく作成したtbodyもSortableにする
-                animation: 150,
-                ghostClass: 'sortable-ghost',
-                handle: '.bi-grip-vertical',
-            });
-            document.getElementById('no-categories-message').style.display = 'none'; // メッセージを非表示に
-        }
+        try {
+            let categoryTbody = document.getElementById(`category-${encodeURIComponent(item.category)}`);
+            if (!categoryTbody) {
+                console.log(`新しいカテゴリ "${item.category}" のブロックを作成します。`);
+                // 新しいカテゴリブロックを作成する必要がある場合
+                const cardBody = document.querySelector('.card-body');
+                const newCategoryBlock = document.createElement('div');
+                newCategoryBlock.className = 'category-block';
+                newCategoryBlock.innerHTML = `
+                    <h3 class="category-title">${item.category}</h3>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50px;"></th>
+                                    <th>メニュー名</th>
+                                    <th>価格</th>
+                                    <th>表示状態</th>
+                                    <th class="text-end">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody class="sortable-list" id="category-${encodeURIComponent(item.category)}">
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                cardBody.insertBefore(newCategoryBlock, document.getElementById('no-categories-message'));
+                categoryTbody = document.getElementById(`category-${encodeURIComponent(item.category)}`);
+                // 新しく作成したtbodyもSortableにする
+                new Sortable(categoryTbody, { 
+                    animation: 150,
+                    ghostClass: 'sortable-ghost',
+                    handle: '.bi-grip-vertical',
+                });
+                document.getElementById('no-categories-message').style.display = 'none'; // メッセージを非表示に
+            }
 
-        const row = document.createElement('tr');
-        row.id = `item-row-${item.item_id}`;
-        row.dataset.id = item.item_id;
-        row.dataset.category = encodeURIComponent(item.category);
-        row.dataset.active = item.active;
-        row.className = 'sortable-item';
-        row.innerHTML = `
-            <td><i class="bi bi-grip-vertical"></i></td>
-            <td>${item.name}</td>
-            <td>¥${item.price.toLocaleString()}</td>
-            <td>
-                <span class="badge ${item.active ? 'bg-success' : 'bg-secondary'}" id="active-badge-${item.item_id}">
-                    ${item.active ? '表示中' : '非表示'}
-                </span>
-            </td>
-            <td class="text-end">
-                <div class="btn-group" role="group">
-                    <button class="btn btn-sm btn-outline-secondary" onclick="toggleActive(${item.item_id})">切替</button>
-                    <button class="btn btn-sm btn-outline-danger" onclick="deleteItem(${item.item_id})">削除</button>
-                </div>
-            </td>
-        `;
-        categoryTbody.appendChild(row);
+            const row = document.createElement('tr');
+            row.id = `item-row-${item.item_id}`;
+            row.dataset.id = item.item_id;
+            row.dataset.category = encodeURIComponent(item.category);
+            row.dataset.active = item.active;
+            row.className = 'sortable-item';
+            row.innerHTML = `
+                <td><i class="bi bi-grip-vertical"></i></td>
+                <td>${item.name}</td>
+                <td>¥${item.price.toLocaleString()}</td>
+                <td>
+                    <span class="badge ${item.active ? 'bg-success' : 'bg-secondary'}" id="active-badge-${item.item_id}">
+                        ${item.active ? '表示中' : '非表示'}
+                    </span>
+                </td>
+                <td class="text-end">
+                    <div class="btn-group" role="group">
+                        <button class="btn btn-sm btn-outline-secondary" onclick="toggleActive(${item.item_id})">切替</button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteItem(${item.item_id})">削除</button>
+                    </div>
+                </td>
+            `;
+            categoryTbody.appendChild(row);
+            console.log(`メニューアイテム "${item.name}" がDOMに追加されました。`);
+        } catch (e) {
+            console.error('addMenuItemToDOM 関数内でエラーが発生しました:', e);
+            alert('メニューアイテムのDOM追加中にエラーが発生しました。');
+        }
     }
 
     document.getElementById('add-menu-form').addEventListener('submit', async function(e) {
         e.preventDefault();
+        console.log('「追加」フォームが送信されました。');
         const form = e.target;
         const name = form.name.value;
         const price = form.price.value;
         const category = form.category.value;
 
-        const response = await fetch('/api/menu/add', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, price, category })
-        });
-        
-        if (await handleApiError(response)) return; // エラーハンドリング
+        try {
+            const response = await fetch('/api/menu/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, price, category })
+            });
+            
+            if (await handleApiError(response)) return;
 
-        const data = await response.json();
-        if (response.ok && data.success) {
-            alert('メニューを追加しました。');
-            addMenuItemToDOM(data); // ページリロードなしで追加
-            form.reset(); // フォームをクリア
-        } else {
-            alert(data.message || '追加に失敗しました。');
+            const data = await response.json();
+            if (response.ok && data.success) {
+                alert('メニューを追加しました。');
+                addMenuItemToDOM(data); // ページリロードなしで追加
+                form.reset(); // フォームをクリア
+                console.log('メニュー追加成功:', data);
+            } else {
+                alert(data.message || '追加に失敗しました。');
+                console.error('メニュー追加失敗:', data);
+            }
+        } catch (error) {
+            console.error('メニュー追加処理中にエラー:', error);
+            alert('メニューの追加中にエラーが発生しました。');
         }
     });
 
     async function deleteItem(itemId) {
+        console.log(`アイテムID ${itemId} の削除がリクエストされました。`);
         if (!confirm('本当にこのメニューを削除しますか？')) return;
         
-        const response = await fetch(`/api/menu/${itemId}`, { method: 'DELETE' });
-        if (await handleApiError(response)) return; // エラーハンドリング
+        try {
+            const response = await fetch(`/api/menu/${itemId}`, { method: 'DELETE' });
+            if (await handleApiError(response)) return;
 
-        if (response.ok) {
-            document.getElementById(`item-row-${itemId}`).remove(); // DOMから削除
-            alert('メニューを削除しました。');
+            if (response.ok) {
+                const rowEl = document.getElementById(`item-row-${itemId}`);
+                if (rowEl) {
+                    rowEl.remove(); // DOMから削除
+                    console.log(`アイテムID ${itemId} がDOMから削除されました。`);
+                    alert('メニューを削除しました。');
 
-            // 削除後、カテゴリ内にアイテムがなくなったらカテゴリブロックも削除
-            const rowEl = document.getElementById(`item-row-${itemId}`);
-            if (rowEl) {
-                const category = rowEl.dataset.category;
-                const tbody = document.getElementById(`category-${category}`);
-                if (tbody && tbody.children.length === 0) {
-                    tbody.closest('.category-block').remove();
+                    // 削除後、カテゴリ内にアイテムがなくなったらカテゴリブロックも削除
+                    const category = rowEl.dataset.category;
+                    const tbody = document.getElementById(`category-${category}`);
+                    if (tbody && tbody.children.length === 0) {
+                        tbody.closest('.category-block').remove();
+                        console.log(`空になったカテゴリブロック "${decodeURIComponent(category)}" を削除しました。`);
+                    }
                 }
+                // 全てのカテゴリが空になったら「メニューなし」メッセージを表示
+                if (document.querySelectorAll('.sortable-item').length === 0) {
+                    document.getElementById('no-categories-message').style.display = 'block';
+                    console.log('全てのメニューが削除されたため、「メニューなし」メッセージを表示しました。');
+                }
+            } else {
+                alert('削除に失敗しました。');
+                console.error('メニュー削除失敗:', response);
             }
-             // 全てのカテゴリが空になったら「メニューなし」メッセージを表示
-             if (document.querySelectorAll('.sortable-item').length === 0) {
-                document.getElementById('no-categories-message').style.display = 'block';
-            }
-        } else {
-            alert('削除に失敗しました。');
+        } catch (error) {
+            console.error('メニュー削除処理中にエラー:', error);
+            alert('メニューの削除中にエラーが発生しました。');
         }
     }
 
     async function toggleActive(itemId) {
-        const response = await fetch(`/api/menu/toggle/${itemId}`, { method: 'POST' });
-        if (await handleApiError(response)) return; // エラーハンドリング
+        console.log(`アイテムID ${itemId} の表示状態切り替えがリクエストされました。`);
+        try {
+            const response = await fetch(`/api/menu/toggle/${itemId}`, { method: 'POST' });
+            if (await handleApiError(response)) return;
 
-        const data = await response.json();
-        if (response.ok && data.success) {
-            const activeBadge = document.getElementById(`active-badge-${itemId}`);
-            if (activeBadge) {
-                if (data.active) {
-                    activeBadge.classList.replace('bg-secondary', 'bg-success');
-                    activeBadge.textContent = '表示中';
-                } else {
-                    activeBadge.classList.replace('bg-success', 'bg-secondary');
-                    activeBadge.textContent = '非表示';
+            const data = await response.json();
+            if (response.ok && data.success) {
+                const activeBadge = document.getElementById(`active-badge-${itemId}`);
+                if (activeBadge) {
+                    if (data.active) {
+                        activeBadge.classList.replace('bg-secondary', 'bg-success');
+                        activeBadge.textContent = '表示中';
+                    } else {
+                        activeBadge.classList.replace('bg-success', 'bg-secondary');
+                        activeBadge.textContent = '非表示';
+                    }
+                    console.log(`アイテムID ${itemId} の表示状態が "${activeBadge.textContent}" に切り替わりました。`);
                 }
+                alert('表示状態を切り替えました。');
+            } else {
+                alert(data.message || '状態の切り替えに失敗しました。');
+                console.error('表示状態切り替え失敗:', data);
             }
-            alert('表示状態を切り替えました。');
-        } else {
-            alert(data.message || '状態の切り替えに失敗しました。');
+        } catch (error) {
+            console.error('表示状態切り替え処理中にエラー:', error);
+            alert('状態の切り替え中にエラーが発生しました。');
         }
     }
 </script>
