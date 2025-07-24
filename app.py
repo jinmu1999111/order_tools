@@ -123,39 +123,125 @@ class TempQRToken(db.Model):
         return datetime.datetime.now(JST) < expiry
 
 # --- データベース初期化関数 ---
+
 def init_database():
-    """アプリケーション起動時にデータベースを初期化"""
+    """アプリケーション起動時にデータベースを初期化・マイグレーション"""
     try:
         with app.app_context():
+            # 基本テーブル作成
             db.create_all()
+            
+            # 新しいカラムを安全に追加
+            try:
+                # Orderテーブルに新しいカラムを追加
+                with db.engine.connect() as conn:
+                    # PostgreSQLの場合
+                    if 'postgresql' in app.config['SQLALCHEMY_DATABASE_URI']:
+                        # persistent_session_id カラムを追加
+                        try:
+                            conn.execute('ALTER TABLE "order" ADD COLUMN persistent_session_id VARCHAR(100)')
+                            print("✅ persistent_session_id カラムを追加しました")
+                        except Exception as e:
+                            if 'already exists' in str(e) or 'duplicate column' in str(e):
+                                print("ℹ️ persistent_session_id カラムは既に存在します")
+                            else:
+                                print(f"⚠️ persistent_session_id カラム追加エラー: {e}")
+                        
+                        # individual_session_id カラムを追加
+                        try:
+                            conn.execute('ALTER TABLE "order" ADD COLUMN individual_session_id VARCHAR(100)')
+                            print("✅ individual_session_id カラムを追加しました")
+                        except Exception as e:
+                            if 'already exists' in str(e) or 'duplicate column' in str(e):
+                                print("ℹ️ individual_session_id カラムは既に存在します")
+                            else:
+                                print(f"⚠️ individual_session_id カラム追加エラー: {e}")
+                        
+                        # Tableテーブルに新しいカラムを追加
+                        try:
+                            conn.execute('ALTER TABLE "table" ADD COLUMN persistent_session_id VARCHAR(100)')
+                            print("✅ table.persistent_session_id カラムを追加しました")
+                        except Exception as e:
+                            if 'already exists' in str(e) or 'duplicate column' in str(e):
+                                print("ℹ️ table.persistent_session_id カラムは既に存在します")
+                            else:
+                                print(f"⚠️ table.persistent_session_id カラム追加エラー: {e}")
+                        
+                        try:
+                            conn.execute('ALTER TABLE "table" ADD COLUMN last_accessed TIMESTAMP WITH TIME ZONE')
+                            print("✅ table.last_accessed カラムを追加しました")
+                        except Exception as e:
+                            if 'already exists' in str(e) or 'duplicate column' in str(e):
+                                print("ℹ️ table.last_accessed カラムは既に存在します")
+                            else:
+                                print(f"⚠️ table.last_accessed カラム追加エラー: {e}")
+                    
+                    # SQLiteの場合
+                    else:
+                        # SQLiteは ALTER TABLE ADD COLUMN をサポート
+                        try:
+                            conn.execute('ALTER TABLE "order" ADD COLUMN persistent_session_id VARCHAR(100)')
+                            conn.execute('ALTER TABLE "order" ADD COLUMN individual_session_id VARCHAR(100)')
+                            conn.execute('ALTER TABLE "table" ADD COLUMN persistent_session_id VARCHAR(100)')
+                            conn.execute('ALTER TABLE "table" ADD COLUMN last_accessed DATETIME')
+                            print("✅ SQLite: 全ての新しいカラムを追加しました")
+                        except Exception as e:
+                            if 'duplicate column' not in str(e):
+                                print(f"⚠️ SQLite カラム追加エラー: {e}")
+                            else:
+                                print("ℹ️ SQLite: カラムは既に存在します")
+                
+                # コミット
+                db.session.commit()
+                
+            except Exception as migration_error:
+                print(f"⚠️ マイグレーション警告: {migration_error}")
+                # マイグレーションが失敗しても続行
             
             # 管理者アカウントの作成
             if not User.query.filter_by(username='admin').first():
                 admin_user = User(username='admin')
                 admin_user.set_password('password123')
                 db.session.add(admin_user)
-                print("管理者アカウントを作成しました: admin / password123")
+                print("✅ 管理者アカウントを作成しました: admin / password123")
             
             # サンプルテーブルの作成（永続セッションID付き）
             if Table.query.count() == 0:
                 for i in range(1, 6):
                     table = Table(name=f'{i}番テーブル')
                     table.active_qr_token = secrets.token_urlsafe(16)
-                    table.qr_token_expiry = datetime.datetime.now(JST) + datetime.timedelta(hours=5)  # 5時間
-                    table.persistent_session_id = secrets.token_hex(16)  # 永続セッションID追加
+                    table.qr_token_expiry = datetime.datetime.now(JST) + datetime.timedelta(hours=5)
+                    table.persistent_session_id = secrets.token_hex(16)
                     db.session.add(table)
-                print("サンプルテーブルを作成しました。")
+                print("✅ サンプルテーブルを作成しました。")
             
-            # 既存テーブルに永続セッションIDを追加（マイグレーション用）
-            existing_tables = Table.query.filter_by(persistent_session_id=None).all()
-            for table in existing_tables:
-                table.persistent_session_id = secrets.token_hex(16)
-                print(f"テーブル '{table.name}' に永続セッションIDを追加しました。")
+            # 既存テーブルに永続セッションIDを追加
+            try:
+                existing_tables = Table.query.filter_by(persistent_session_id=None).all()
+                for table in existing_tables:
+                    table.persistent_session_id = secrets.token_hex(16)
+                    print(f"✅ テーブル '{table.name}' に永続セッションIDを追加しました。")
+            except Exception as e:
+                print(f"⚠️ 既存テーブル更新エラー: {e}")
+            
+            # 既存注文に永続セッションIDを追加（可能な範囲で）
+            try:
+                orders_without_persistent_id = Order.query.filter_by(persistent_session_id=None).all()
+                for order in orders_without_persistent_id:
+                    if order.table and order.table.persistent_session_id:
+                        order.persistent_session_id = order.table.persistent_session_id
+                        order.individual_session_id = secrets.token_hex(8)
+                if orders_without_persistent_id:
+                    print(f"✅ {len(orders_without_persistent_id)}件の既存注文に永続IDを追加しました。")
+            except Exception as e:
+                print(f"⚠️ 既存注文更新エラー: {e}")
             
             db.session.commit()
-            print("データベースの初期化・更新が完了しました。")
+            print("✅ データベースの初期化・マイグレーションが完了しました。")
+            
     except Exception as e:
-        print(f"データベース初期化エラー: {e}")
+        print(f"❌ データベース初期化エラー: {e}")
+        # 重大なエラーの場合は再起動が必要かもしれません
 
 # --- ルートとロジック ---
 @login_manager.user_loader
