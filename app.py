@@ -19,7 +19,6 @@ app.secret_key = os.environ.get('SECRET_KEY', 'your-fixed-secret-key-change-this
 db_url = os.environ.get('DATABASE_URL')
 if db_url and db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
-
 if not db_url:
     db_url = 'sqlite:///instance/test.db'
 
@@ -139,7 +138,6 @@ def qr_auth(token):
 def get_menu_data(sort_by='category'):
     if sort_by == 'popularity':
         items = MenuItem.query.filter_by(active=True).order_by(MenuItem.popularity_count.desc()).all()
-        # ★★★ 修正箇所 ★★★
         return {'item_list': items}
     else:
         sorted_categories = Category.query.order_by(Category.sort_order).all()
@@ -147,7 +145,6 @@ def get_menu_data(sort_by='category'):
         for category in sorted_categories:
             items = MenuItem.query.filter_by(active=True, category_id=category.id).order_by(MenuItem.sort_order).all()
             if items:
-                # ★★★ 修正箇所 ★★★
                 categorized_menu.append({'category_name': category.name, 'item_list': items})
         return {'categorized_menu': categorized_menu}
 
@@ -165,7 +162,6 @@ def table_menu_partial(table_id):
     sort_by = request.args.get('sort_by', 'category')
     menu_data = get_menu_data(sort_by)
     if sort_by == 'popularity':
-        # ★★★ 修正箇所 ★★★
         return render_template('_menu_popular.html', items=menu_data['item_list'])
     else:
         return render_template('_menu_category.html', categorized_menu=menu_data['categorized_menu'])
@@ -173,7 +169,8 @@ def table_menu_partial(table_id):
 # --- 管理者ページ ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if current_user.is_authenticated: return redirect(url_for('dashboard'))
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
     if request.method == 'POST':
         user = User.query.filter_by(username=request.form['username']).first()
         if user and user.check_password(request.form['password']):
@@ -219,13 +216,8 @@ def admin_menu():
     categorized_items = []
     for category in sorted_categories:
         items = MenuItem.query.filter_by(category_id=category.id).order_by(MenuItem.sort_order).all()
-        # ★★★ 修正箇所 ★★★
         categorized_items.append({'category_obj': category, 'item_list': items})
     return render_template('admin_menu.html', categorized_items=categorized_items)
-
-# ( ... その他のルートは変更なし ... )
-# ( ... 省略 ... )
-# ( ... ファイルの末尾まで変更なし ... )
 
 @app.route('/admin/tables')
 @login_required
@@ -375,7 +367,6 @@ def api_add_menu_item():
     data = request.json
     if not all(k in data for k in ['name', 'price', 'category']):
         return jsonify(success=False, message='Missing data'), 400
-
     category_name = data['category']
     category = Category.query.filter_by(name=category_name).first()
     if not category:
@@ -384,14 +375,11 @@ def api_add_menu_item():
         category = Category(name=category_name, sort_order=new_cat_order)
         db.session.add(category)
         db.session.flush()
-
     max_item_order = db.session.query(func.max(MenuItem.sort_order)).filter_by(category_id=category.id).scalar()
     new_item_order = (max_item_order + 1) if max_item_order is not None else 0
-    
     item = MenuItem(name=data['name'], price=int(data['price']), category_id=category.id, sort_order=new_item_order)
     db.session.add(item)
     db.session.commit()
-    
     return jsonify(success=True, item_id=item.id, name=item.name, price=item.price, category=category.name, active=item.active)
 
 @app.route('/api/menu/<int:item_id>', methods=['DELETE'])
@@ -569,3 +557,4 @@ def init_db_command():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)
+}
