@@ -17,6 +17,7 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'your-fixed-secret-key-change-this-in-production-1234567890')
 db_url = os.environ.get('DATABASE_URL', 'sqlite:///instance/test.db')
 if db_url.startswith("postgres://"):
+    # SQLAlchemy 2.0+ の形式に変換
     db_url = db_url.replace("postgres://", "postgresql://", 1)
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -30,6 +31,7 @@ JST = pytz.timezone('Asia/Tokyo')
 # --- テンプレートで使用するグローバル変数を設定 ---
 @app.context_processor
 def inject_globals():
+    """全てのテンプレートでJSTを使えるようにする"""
     return dict(JST=JST)
 
 # --- ログイン機能の設定 ---
@@ -53,25 +55,14 @@ class User(UserMixin, db.Model):
     def set_password(self, password): self.password_hash = generate_password_hash(password)
     def check_password(self, password): return check_password_hash(self.password_hash, password)
 
-# ★★★ 修正箇所 ★★★
-# Categoryモデルを追加
-class Category(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(50), unique=True, nullable=False)
-    sort_order = db.Column(db.Integer, default=0, nullable=False)
-    items = db.relationship('MenuItem', backref='category_ref', lazy='dynamic', cascade="all, delete-orphan")
-
 class MenuItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     price = db.Column(db.Integer, nullable=False)
+    category = db.Column(db.String(50), nullable=False)
     active = db.Column(db.Boolean, default=True)
     popularity_count = db.Column(db.Integer, default=0)
     sort_order = db.Column(db.Integer, default=0, nullable=False)
-    # 外部キーでCategoryを参照
-    category_id = db.Column(db.Integer, db.ForeignKey('category.id'), nullable=False)
-    # 'category'という名前のプロパティを削除 (新しい 'category_ref' を使用)
-
 
 class Table(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -137,20 +128,15 @@ def qr_auth(token):
     return redirect(url_for('index'))
 
 def get_menu_data(sort_by='category'):
-    # ★★★ 修正箇所 ★★★
     if sort_by == 'popularity':
         items = MenuItem.query.filter_by(active=True).order_by(MenuItem.popularity_count.desc()).all()
         return {'items': items}
     else:
-        # カテゴリの並び順で取得
-        sorted_categories = Category.query.order_by(Category.sort_order).all()
-        categorized_menu = []
-        for category in sorted_categories:
-            items = MenuItem.query.filter_by(active=True, category_id=category.id).order_by(MenuItem.sort_order).all()
-            if items:
-                categorized_menu.append({'category_name': category.name, 'items': items})
+        menu_items = MenuItem.query.filter_by(active=True).order_by(MenuItem.category, MenuItem.sort_order).all()
+        categorized_menu = defaultdict(list)
+        for item in menu_items:
+            categorized_menu[item.category].append(item)
         return {'categorized_menu': categorized_menu}
-
 
 @app.route('/table/<int:table_id>')
 def table_menu(table_id):
@@ -193,39 +179,94 @@ def logout():
 @app.route('/kitchen')
 @login_required
 def kitchen():
+    # 初期統計データを計算 (ここではまだ全てのステータスを計算)
     today_start = datetime.datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)
+    
     pending_orders = Order.query.filter_by(status='pending').count()
     preparing_orders = Order.query.filter_by(status='preparing').count()
-    ready_orders = Order.query.filter_by(status='ready').count()
+    ready_orders = Order.query.filter_by(status='ready').count() # readyもカウントはするが、表示はしない
     total_orders = Order.query.filter(Order.timestamp >= today_start).count()
-    stats = {'pending_orders': pending_orders, 'preparing_orders': preparing_orders, 'ready_orders': ready_orders, 'total_orders': total_orders}
+    
+    stats = {
+        'pending_orders': pending_orders,
+        'preparing_orders': preparing_orders,
+        'ready_orders': ready_orders, # frontendで表示しないようにする
+        'total_orders': total_orders
+    }
+    
     return render_template('kitchen.html', stats=stats)
 
 
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    today_start = datetime.datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)
-    sales_query = db.session.query(func.sum(Order.item_price), func.count(Order.id)).filter(Order.timestamp >= today_start, Order.status != 'cancelled')
-    today_sales, today_orders = sales_query.one()
-    today_sales = today_sales or 0
-    today_orders = today_orders or 0
-    stats = {'today_sales': today_sales, 'today_orders': today_orders, 'avg_spend': (today_sales / today_orders) if today_orders > 0 else 0, 'occupied_tables': Table.query.filter_by(status='occupied').count(), 'total_tables': Table.query.count()}
-    return render_template('dashboard.html', stats=stats)
+    # タイムゾーンを考慮した現在時刻の取得
+    tz = pytz.timezone(app.config.get('TIMEZONE', 'UTC')) # 修正: app.configからTIMEZONEを取得
+    now_in_tz = datetime.datetime.now(tz) # 修正: datetime.datetime を使用
+    today_in_tz = now_in_tz.date()
+
+    # 今日の始まりと終わりをタイムゾーン対応で設定
+    start_of_day = tz.localize(datetime.datetime.combine(today_in_tz, datetime.time.min)) # 修正: datetime.datetime.combine を使用
+    end_of_day = tz.localize(datetime.datetime.combine(today_in_tz, datetime.time.max)) # 修正: datetime.datetime.combine を使用
+
+    # 今日の売上合計 (キャンセルされていない注文のみを対象)
+    total_sales_today = db.session.query(func.sum(Order.item_price)). \
+        filter(Order.timestamp.between(start_of_day, end_of_day),
+               Order.status != 'cancelled'). \
+        scalar() or 0
+
+    # 今日の注文数 (キャンセルされていない注文のみを対象)
+    total_orders_today = Order.query.filter(Order.timestamp.between(start_of_day, end_of_day),
+                                            Order.status != 'cancelled').count()
+
+    # 今日の平均注文額
+    average_order_value_today = (total_sales_today / total_orders_today) if total_orders_today > 0 else 0
+
+    # 今日の人気メニュー (上位5件) (キャンセルされていない注文のみを対象)
+    popular_items_query = db.session.query(
+        MenuItem.name,
+        func.sum(Order.item_price).label('total_sales') # ここはtotal_quantityが適切か確認
+    ). \
+        join(Order, Order.item_name == MenuItem.name). \ # OrderItemモデルがないため簡略化
+        filter(Order.timestamp.between(start_of_day, end_of_day),
+               Order.status != 'cancelled'). \
+        group_by(MenuItem.name). \
+        order_by(func.sum(Order.item_price).desc()). \
+        limit(5).all()
+
+    #popular_items_today_formatted = [{'name': item.name, 'count': item.total_sales} for item in popular_items_query]
+    # ダッシュボードには合計数量が欲しい場合が多いため、item_nameと集計した数量で対応
+    popular_items_today_formatted = db.session.query(
+        Order.item_name,
+        func.count(Order.id).label('total_quantity_sold')
+    ).filter(
+        Order.timestamp.between(start_of_day, end_of_day),
+        Order.status != 'cancelled'
+    ).group_by(Order.item_name).order_by(func.count(Order.id).desc()).limit(5).all()
+
+
+    # 卓ごとの現在の注文状況
+    occupied_tables_count = Table.query.filter_by(status='occupied').count()
+    total_tables_count = Table.query.count()
+
+    return render_template('dashboard.html',
+                           today_sales=total_sales_today, # テンプレート変数名を修正
+                           today_orders=total_orders_today, # テンプレート変数名を修正
+                           avg_spend=average_order_value_today, # テンプレート変数名を修正
+                           popular_items=popular_items_today_formatted, # テンプレート変数名を修正
+                           occupied_tables=occupied_tables_count, # テンプレート変数名を修正
+                           total_tables=total_tables_count # テンプレート変数名を修正
+                           )
+
 
 @app.route('/admin/menu')
 @login_required
 def admin_menu():
-    # ★★★ 修正箇所 ★★★
-    # カテゴリの並び順で取得し、その中のアイテムも並び順で取得
-    sorted_categories = Category.query.order_by(Category.sort_order).all()
-    categorized_items = []
-    for category in sorted_categories:
-        items = MenuItem.query.filter_by(category_id=category.id).order_by(MenuItem.sort_order).all()
-        # 管理画面ではアイテムが0でもカテゴリは表示する
-        categorized_items.append({'category_obj': category, 'items': items})
+    menu_items_query = MenuItem.query.order_by(MenuItem.category, MenuItem.sort_order).all()
+    categorized_items = defaultdict(list)
+    for item in menu_items_query:
+        categorized_items[item.category].append(item)
     return render_template('admin_menu.html', categorized_items=categorized_items)
-
 
 @app.route('/admin/tables')
 @login_required
@@ -237,7 +278,28 @@ def admin_tables():
 @login_required
 def admin_history():
     tables = Table.query.order_by(Table.name).all()
-    return render_template('admin_history.html', tables=tables)
+    # 注文履歴の表示フィルタリングロジック (show_cancelled パラメータ)
+    show_cancelled = request.args.get('show_cancelled', 'false').lower() == 'true'
+    query = Order.query.order_by(Order.timestamp.desc())
+    if not show_cancelled:
+        query = query.filter_by(status='cancelled') # is_cancelledがFalseのものを表示
+    orders_data = query.all()
+
+    # 注文アイテムの情報を取得して結合
+    history_orders = []
+    for order in orders_data:
+        # OrderItemモデルがないため、Order.item_name, Order.item_price を直接使用
+        # 実際にはOrder.items (relationship) を使用し、OrderItemの情報を取得する
+        history_orders.append({
+            'id': order.id,
+            'table_name': order.table.name,
+            'item_name': order.item_name, # Orderモデルに直接あると仮定
+            'item_price': order.item_price, # Orderモデルに直接あると仮定
+            'status': order.status,
+            'timestamp': order.timestamp
+        })
+    
+    return render_template('admin_history.html', orders=history_orders, tables=tables, show_cancelled=show_cancelled)
 
 @app.route('/admin/guidance')
 @login_required
@@ -247,16 +309,41 @@ def admin_guidance():
 @app.route('/admin/analytics')
 @login_required
 def admin_analytics():
+    """売上統計ページ"""
     today_start = datetime.datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)
-    today_orders = Order.query.filter(Order.timestamp >= today_start).count()
-    today_revenue = db.session.query(func.sum(Order.item_price)).filter(Order.timestamp >= today_start, Order.status != 'cancelled').scalar() or 0
-    popular_items_query = db.session.query(Order.item_name, func.count(Order.id).label('total_quantity')).filter(Order.timestamp >= today_start, Order.status != 'cancelled').group_by(Order.item_name).order_by(desc('total_quantity')).limit(5).all()
-    popular_items = [{'item_name': name, 'total_quantity': count} for name, count in popular_items_query]
-    return render_template('admin_analytics.html', today_orders=today_orders, today_revenue=today_revenue, popular_items=popular_items)
+    
+    today_orders = Order.query.filter(
+        Order.timestamp >= today_start
+    ).count()
+    
+    today_revenue = db.session.query(func.sum(Order.item_price)).filter(
+        Order.timestamp >= today_start,
+        Order.status != 'cancelled'
+    ).scalar() or 0
+    
+    # 人気メニューの取得
+    popular_items_query = db.session.query(
+        Order.item_name, 
+        func.count(Order.id).label('total_quantity')
+    ).filter(
+        Order.timestamp >= today_start,
+        Order.status != 'cancelled'
+    ).group_by(Order.item_name).order_by(desc('total_quantity')).limit(5).all()
+    
+    popular_items = [
+        {'item_name': name, 'total_quantity': count} 
+        for name, count in popular_items_query
+    ]
+    
+    return render_template('admin_analytics.html', 
+                         today_orders=today_orders,
+                         today_revenue=today_revenue,
+                         popular_items=popular_items)
 
 @app.route('/admin/security')
 @login_required
 def admin_security():
+    """セキュリティログページ"""
     recent_logs = []
     return render_template('admin_security.html', recent_logs=recent_logs)
 
@@ -290,13 +377,63 @@ def api_customer_orders():
 @app.route('/api/kitchen/orders')
 @login_required
 def api_kitchen_orders():
-    orders_query = Order.query.filter(Order.status.in_(['pending', 'preparing'])).order_by(Order.timestamp.asc()).all()
-    output = [{'id': o.id, 'table_name': o.table.name, 'item_name': o.item_name, 'status': o.status, 'timestamp': o.timestamp.isoformat()} for o in orders_query]
+    # 表示する注文ステータスをpendingとpreparingに限定
+    orders_query = Order.query.filter(
+        and_(Order.status.in_(['pending', 'preparing']))
+    ).order_by(Order.timestamp.asc()).all()
+    
+    # セッションIDごとに注文をグループ化
+    orders_by_session = defaultdict(list)
+    for o in orders_query:
+        orders_by_session[o.session_id].append(o)
+    
+    output = []
+    for session_id, orders in orders_by_session.items():
+        if not orders:
+            continue
+        
+        # セッション内の全注文アイテムをカウント
+        item_counts = defaultdict(int)
+        for item in orders:
+            item_counts[item.item_name] += 1
+            
+        # そのセッションの「最も進んだ」ステータスを決定
+        current_status = 'pending'
+        if any(o.status == 'preparing' for o in orders):
+            current_status = 'preparing'
+
+        output.append({
+            'id': orders[0].id,
+            'session_id': session_id,
+            'table_number': orders[0].table.name,
+            'created_at': orders[0].timestamp.isoformat(),
+            'status': current_status,
+            'items': [{'name': name, 'quantity': qty} for name, qty in item_counts.items()]
+        })
+
+    # 表示順序を調整 (pending -> preparing)
+    output.sort(key=lambda x: (
+        0 if x['status'] == 'pending' else
+        1 if x['status'] == 'preparing' else 2, # 他のステータスは表示されないが、念のため
+        x['created_at']
+    ))
+
+    # 各ステータスごとの注文数を計算
     pending_orders_count = Order.query.filter_by(status='pending').count()
     preparing_orders_count = Order.query.filter_by(status='preparing').count()
-    ready_orders_count = Order.query.filter_by(status='ready').count()
-    total_orders_today_count = Order.query.filter(Order.timestamp >= datetime.datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)).count()
-    stats = {'pending_orders': pending_orders_count, 'preparing_orders': preparing_orders_count, 'ready_orders': ready_orders_count, 'total_orders': total_orders_today_count}
+    # ready_orders_countは画面表示から除外するため、ここでは直接使用しないが、statsには含める
+    ready_orders_count = Order.query.filter_by(status='ready').count() 
+    total_orders_today_count = Order.query.filter(
+        Order.timestamp >= datetime.datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)
+    ).count()
+
+    stats = {
+        'pending_orders': pending_orders_count,
+        'preparing_orders': preparing_orders_count,
+        'ready_orders': ready_orders_count, # 画面では表示しないがデータとしては渡す
+        'total_orders': total_orders_today_count
+    }
+
     return jsonify(success=True, orders=output, stats=stats)
 
 @app.route('/api/kitchen/orders/<int:order_id>/status', methods=['PUT'])
@@ -304,20 +441,29 @@ def api_kitchen_orders():
 def update_order_status(order_id):
     data = request.json
     new_status = data.get('status')
+
     order_to_update = db.session.get(Order, order_id)
-    if not order_to_update: return jsonify(success=False, message="注文が見つかりません。"), 404
-    if new_status == 'preparing' and order_to_update.status == 'pending':
-        order_to_update.status = new_status
-    elif new_status == 'served' and order_to_update.status in ['pending', 'preparing']:
-        order_to_update.status = new_status
-    else:
-        return jsonify(success=False, message="許可されていないステータス変更です。"), 400
+    
+    if not order_to_update:
+        return jsonify(success=False, message="注文が見つかりません。"), 404
+
+    # 関連する同じセッションIDのすべての注文のステータスを更新
+    orders_in_session = Order.query.filter_by(session_id=order_to_update.session_id).all()
+    
+    for order in orders_in_session:
+        if new_status == 'preparing' and order.status == 'pending':
+            order.status = new_status
+        elif new_status == 'served' and (order.status == 'preparing' or order.status == 'pending'): # pendingからも直接servedに変更できるようにする
+            order.status = new_status
+    
     db.session.commit()
     return jsonify(success=True, message=f"注文ステータスを {new_status} に更新しました。")
 
 @app.route('/api/order/complete/<session_id>', methods=['POST'])
 @login_required
 def api_complete_order(session_id):
+    # このAPIは、セッション単位での完了（Ready->Served）として残しておくが、
+    # 今回の簡素化されたキッチンフローでは直接使用されない。
     orders = Order.query.filter_by(session_id=session_id, status='ready').all()
     if not orders: return jsonify(success=False, message="対象の注文が見つかりません。"), 404
     for order in orders: order.status = 'served'
@@ -358,7 +504,9 @@ def api_add_table():
     new_table.qr_token_expiry = datetime.datetime.now(JST) + datetime.timedelta(hours=8)
     db.session.add(new_table)
     db.session.commit()
-    return jsonify(success=True, id=new_table.id, name=new_table.name, token=new_table.active_qr_token, expiry=new_table.qr_token_expiry.isoformat())
+    return jsonify(success=True, id=new_table.id, name=new_table.name, 
+                   token=new_table.active_qr_token, 
+                   expiry=new_table.qr_token_expiry.isoformat())
 
 @app.route('/api/tables/<int:table_id>', methods=['DELETE'])
 @login_required
@@ -374,26 +522,12 @@ def api_delete_table(table_id):
 def api_add_menu_item():
     data = request.json
     if not all(k in data for k in ['name', 'price', 'category']): return jsonify(success=False, message='Missing data'), 400
-    
-    # ★★★ 修正箇所 ★★★
-    # カテゴリが存在するか確認し、なければ作成する
-    category_name = data['category']
-    category = Category.query.filter_by(name=category_name).first()
-    if not category:
-        max_cat_order = db.session.query(func.max(Category.sort_order)).scalar()
-        new_cat_order = (max_cat_order + 1) if max_cat_order is not None else 0
-        category = Category(name=category_name, sort_order=new_cat_order)
-        db.session.add(category)
-        db.session.flush() # category.id を取得するためにflush
-
-    max_item_order = db.session.query(func.max(MenuItem.sort_order)).filter_by(category_id=category.id).scalar()
-    new_item_order = (max_item_order + 1) if max_item_order is not None else 0
-    
-    item = MenuItem(name=data['name'], price=int(data['price']), category_id=category.id, sort_order=new_item_order)
+    max_sort_order = db.session.query(func.max(MenuItem.sort_order)).filter_by(category=data['category']).scalar()
+    new_sort_order = (max_sort_order + 1) if max_sort_order is not None else 0
+    item = MenuItem(name=data['name'], price=int(data['price']), category=data['category'], sort_order=new_sort_order)
     db.session.add(item)
     db.session.commit()
-    
-    return jsonify(success=True, item_id=item.id, name=item.name, price=item.price, category=category.name, active=item.active)
+    return jsonify(success=True, item_id=item.id, name=item.name, price=item.price, category=item.category, active=item.active)
 
 @app.route('/api/menu/<int:item_id>', methods=['DELETE'])
 @login_required
@@ -421,36 +555,17 @@ def update_menu_order():
     if not item_ids: return jsonify(success=False, message="No item IDs provided"), 400
     try:
         items_map = {item.id: item for item in MenuItem.query.filter(MenuItem.id.in_(item_ids)).all()}
+        
         for index, item_id_str in enumerate(item_ids):
             item_id = int(item_id_str)
-            item = items_map.get(item_id)
-            if item: item.sort_order = index
+            item = items_map.get(item)
+            if item: 
+                item.sort_order = index
         db.session.commit()
         return jsonify(success=True)
     except Exception as e:
         db.session.rollback()
         return jsonify(success=False, message=str(e)), 500
-
-# ★★★ 新規追加 ★★★
-# カテゴリの並び順を保存するAPI
-@app.route('/api/category/order', methods=['POST'])
-@login_required
-def update_category_order():
-    data = request.json
-    category_ids = data.get('category_ids')
-    if not category_ids: return jsonify(success=False, message="No category IDs provided"), 400
-    try:
-        category_map = {cat.id: cat for cat in Category.query.filter(Category.id.in_(category_ids)).all()}
-        for index, cat_id_str in enumerate(category_ids):
-            cat_id = int(cat_id_str)
-            category = category_map.get(cat_id)
-            if category: category.sort_order = index
-        db.session.commit()
-        return jsonify(success=True)
-    except Exception as e:
-        db.session.rollback()
-        return jsonify(success=False, message=str(e)), 500
-
 
 @app.route('/api/history/orders')
 @login_required
@@ -534,6 +649,7 @@ def api_kitchen_status():
 # --- ギャラリールートの追加 ---
 @app.route('/gallery')
 def gallery():
+    # ここに画像ギャラリーのコンテンツを実装します
     return render_template('gallery.html')
 
 # --- エラーハンドラー ---
