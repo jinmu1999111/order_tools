@@ -818,10 +818,15 @@ def init_db_command():
     """データベースを初期化するコマンド"""
     init_database()
 
+# --- データベース初期化コマンド ---
+@app.cli.command("init-db")
+def init_db_command():
+    """データベースを初期化するコマンド"""
+    init_database()
+
 if __name__ == '__main__':
-    # 開発環境での自動初期化
+    # このブロックは `python app.py` と直接実行された時だけ動く
     init_database()
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)
-else:
-    # 本番環境での自動初期化
-    init_database()
+
+# `else` ブロックは完全に削除します
