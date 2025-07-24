@@ -36,8 +36,8 @@
 
 {% block content %}
 <div class="page-container">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="mb-0" style="font-size: 2.5rem;">🍔 メニュー管理</h1>
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <h1 class="mb-0">🍔 メニュー管理</h1>
         <button class="btn btn-success btn-lg" id="save-order-btn">
             <i class="bi bi-check-lg"></i> すべての並び順を保存
         </button>
@@ -149,7 +149,7 @@
             new Sortable(list, {
                 animation: 150,
                 ghostClass: 'sortable-ghost',
-                handle: '.bi-grip-vertical',
+                handle: '.bi bi-grip-vertical',
             });
         });
         document.getElementById('save-order-btn').addEventListener('click', async function() {
@@ -260,7 +260,6 @@
                         activeBadge.textContent = '非表示';
                     }
                 }
-                // alert('表示状態を切り替えました。');
             } else {
                 alert(data.message || '状態の切り替えに失敗しました。');
             }

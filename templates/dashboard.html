@@ -1,11 +1,20 @@
 {% extends 'layout.html' %}
-
 {% block title %}ダッシュボード{% endblock %}
+
+{% block extra_css %}
+<style>
+    @media (max-width: 767.98px) {
+        .card-text.fs-2 {
+            font-size: 1.8rem !important; /* ダッシュボードの数字サイズを調整 */
+        }
+    }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="mb-0" style="font-size: 2.5rem;">📊 管理ダッシュボード</h1>
+        <h1 class="mb-0">📊 管理ダッシュボード</h1>
         <button class="btn btn-danger" id="reset-sales-btn">
             <i class="bi bi-trash"></i> 売上・トレンドリセット
         </button>
@@ -74,13 +83,11 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     let salesChartInstance;
-
- // --- 修正・追加ここから ---
     
     async function fetchDashboardData() {
         try {
             const response = await fetch('/api/dashboard/summary');
-            if (response.status === 401) return location.reload(); // 認証エラーならリロード
+            if (response.status === 401) return location.reload();
             if (!response.ok) throw new Error('Network response was not ok.');
             
             const data = await response.json();
@@ -91,7 +98,7 @@
             document.getElementById('total-tables').textContent = data.total_tables;
 
             const popularList = document.getElementById('popular-items-list');
-            popularList.innerHTML = ''; // 一旦クリア
+            popularList.innerHTML = '';
             if (data.popular_items && data.popular_items.length > 0) {
                 data.popular_items.forEach(item => {
                     const li = document.createElement('li');
@@ -143,13 +150,6 @@
         });
     }
 
-    // --- 修正・追加ここまで ---
-
-    async function fetchDashboardData() { /* ...変更なし... */ }
-    async function fetchSalesChartData() { /* ...変更なし... */ }
-    function renderSalesChart(labels, salesData) { /* ...変更なし... */ }
-
-    // ★★★ 修正点: resetSalesData関数を修正 ★★★
     async function resetSalesData() {
         if (!confirm('本当に全ての売上・トレンドデータをリセットしますか？\nこの操作は取り消せません。全ての注文履歴が削除されます。')) {
             return;
@@ -157,8 +157,6 @@
 
         try {
             const response = await fetch('/api/sales/reset', { method: 'POST' });
-
-            // 401 Unauthorizedの場合、ログインページにリダイレクト
             if (response.status === 401) {
                 alert('セッションが切れました。再度ログインしてください。');
                 window.location.href = '/login';
@@ -181,6 +179,13 @@
 
     document.getElementById('reset-sales-btn').addEventListener('click', resetSalesData);
 
-    document.addEventListener('DOMContentLoaded', () => { /* ...変更なし... */ });
+    document.addEventListener('DOMContentLoaded', () => {
+        fetchDashboardData();
+        fetchSalesChartData();
+        setInterval(() => {
+            fetchDashboardData();
+            fetchSalesChartData();
+        }, 30000);
+    });
 </script>
 {% endblock %}
