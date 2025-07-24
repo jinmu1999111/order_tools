@@ -14,8 +14,11 @@ from flask_migrate import Migrate
 
 # --- アプリケーションとデータベースの初期設定 ---
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'your-fixed-secret-key-change-this-in-production-1234567890')
 
+# SECRET_KEYの強化
+app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
+
+# データベース設定の改善
 db_url = os.environ.get('DATABASE_URL')
 if db_url and db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
@@ -24,7 +27,17 @@ if not db_url:
 
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_recycle': 3600,  # PostgreSQL接続の改善
+    'pool_pre_ping': True
+}
 app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(hours=8)
+
+# セッションの改善
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('FLASK_ENV') == 'production'
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
 instance_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance')
 os.makedirs(instance_path, exist_ok=True)
 db = SQLAlchemy(app)
@@ -41,6 +54,7 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 login_manager.login_message = "このページにアクセスするにはログインが必要です。"
+login_manager.session_protection = "strong"  # セッション保護を強化
 
 @login_manager.unauthorized_handler
 def unauthorized_callback():
@@ -100,6 +114,34 @@ class TempQRToken(db.Model):
         if self.used: return False
         expiry = self.created_at + datetime.timedelta(minutes=30)
         return datetime.datetime.now(JST) < expiry
+
+# --- データベース初期化関数 ---
+def init_database():
+    """アプリケーション起動時にデータベースを初期化"""
+    try:
+        with app.app_context():
+            db.create_all()
+            
+            # 管理者アカウントの作成
+            if not User.query.filter_by(username='admin').first():
+                admin_user = User(username='admin')
+                admin_user.set_password('password123')
+                db.session.add(admin_user)
+                print("管理者アカウントを作成しました: admin / password123")
+            
+            # サンプルテーブルの作成
+            if Table.query.count() == 0:
+                for i in range(1, 6):
+                    table = Table(name=f'{i}番テーブル')
+                    table.active_qr_token = secrets.token_urlsafe(16)
+                    table.qr_token_expiry = datetime.datetime.now(JST) + datetime.timedelta(hours=8)
+                    db.session.add(table)
+                print("サンプルテーブルを作成しました。")
+            
+            db.session.commit()
+            print("データベースの初期化・更新が完了しました。")
+    except Exception as e:
+        print(f"データベース初期化エラー: {e}")
 
 # --- ルートとロジック ---
 @login_manager.user_loader
@@ -171,12 +213,32 @@ def table_menu_partial(table_id):
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
+    
     if request.method == 'POST':
-        user = User.query.filter_by(username=request.form['username']).first()
-        if user and user.check_password(request.form['password']):
-            login_user(user, remember=True)
-            return redirect(url_for('dashboard'))
-        flash('ユーザー名またはパスワードが違います。', 'error')
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        
+        if not username or not password:
+            flash('ユーザー名とパスワードを入力してください。', 'error')
+            return render_template('login.html')
+        
+        try:
+            user = User.query.filter_by(username=username).first()
+            if user and user.check_password(password):
+                login_user(user, remember=True)
+                session.permanent = True
+                
+                # 次のページへのリダイレクト処理
+                next_page = request.args.get('next')
+                if next_page and next_page.startswith('/'):
+                    return redirect(next_page)
+                return redirect(url_for('dashboard'))
+            else:
+                flash('ユーザー名またはパスワードが違います。', 'error')
+        except Exception as e:
+            print(f"ログインエラー: {e}")
+            flash('ログイン処理中にエラーが発生しました。', 'error')
+    
     return render_template('login.html')
 
 @app.route('/logout')
@@ -520,6 +582,16 @@ def api_kitchen_status():
 def gallery():
     return render_template('gallery.html')
 
+# --- ヘルスチェック用エンドポイント ---
+@app.route('/health')
+def health_check():
+    try:
+        # データベース接続確認
+        db.session.execute('SELECT 1')
+        return jsonify({'status': 'healthy', 'database': 'connected'}), 200
+    except Exception as e:
+        return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
+
 # --- エラーハンドラー ---
 @app.errorhandler(404)
 def not_found_error(error):
@@ -535,25 +607,22 @@ def internal_error(error):
         return jsonify(success=False, message='Internal server error'), 500
     return render_template('500.html'), 500
 
+@app.errorhandler(403)
+def forbidden_error(error):
+    if request.path.startswith('/api/'):
+        return jsonify(success=False, message='Access forbidden'), 403
+    return render_template('404.html'), 403
+
 # --- データベース初期化コマンド ---
 @app.cli.command("init-db")
 def init_db_command():
-    with app.app_context():
-        db.create_all()
-        if not User.query.filter_by(username='admin').first():
-            admin_user = User(username='admin')
-            admin_user.set_password('password123')
-            db.session.add(admin_user)
-            print("管理者アカウントを作成しました: admin / password123")
-        if Table.query.count() == 0:
-            for i in range(1, 6):
-                table = Table(name=f'{i}番テーブル')
-                table.active_qr_token = secrets.token_urlsafe(16)
-                table.qr_token_expiry = datetime.datetime.now(JST) + datetime.timedelta(hours=8)
-                db.session.add(table)
-            print("サンプルテーブルを作成しました。")
-        db.session.commit()
-        print("データベースの初期化・更新が完了しました。")
+    """データベースを初期化するコマンド"""
+    init_database()
 
 if __name__ == '__main__':
+    # 開発環境での自動初期化
+    init_database()
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)
+else:
+    # 本番環境での自動初期化
+    init_database()

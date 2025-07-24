@@ -57,10 +57,26 @@
     let soundEnabled = true;
     let knownOrderIds = new Set();
 
-    // ★★★ 修正箇所 ★★★
-    // 新しい通知音を読み込んでおく
-    const notificationSound = new Audio("{{ url_for('static', filename='sounds/notification.mp3') }}");
-    notificationSound.load(); // 事前に読み込む
+    // 音声ファイルの読み込み（エラーハンドリング付き）
+    let notificationSound = null;
+    const soundUrl = "{{ url_for('static', filename='sounds/notification.mp3') }}";
+
+    // 音声ファイルの初期化
+    function initSound() {
+        try {
+            notificationSound = new Audio(soundUrl);
+            notificationSound.load();
+            
+            // 音声ファイルの読み込みエラーハンドリング
+            notificationSound.addEventListener('error', function(e) {
+                console.warn('音声ファイルの読み込みに失敗しました:', e);
+                notificationSound = null;
+            });
+        } catch (error) {
+            console.warn('音声機能が利用できません:', error);
+            notificationSound = null;
+        }
+    }
 
     // 通知表示関数
     function showNotification(message, type = 'info') {
@@ -171,28 +187,49 @@
         }
     }
     
-    // ★★★ 修正箇所 ★★★
-    // サウンドを再生 (読み込んだ音声ファイルを再生)
+    // サウンドを再生（エラーハンドリング付き）
     function playSound() {
-        // 再生が中断されないように、再生位置を先頭に戻す
-        notificationSound.currentTime = 0;
-        notificationSound.play().catch(e => console.error("音声の再生に失敗しました:", e));
+        if (notificationSound) {
+            try {
+                notificationSound.currentTime = 0;
+                notificationSound.play().catch(e => {
+                    console.warn("音声の再生に失敗しました:", e);
+                    // 音声が再生できない場合は無効化
+                    soundEnabled = false;
+                    updateSoundButton();
+                });
+            } catch (error) {
+                console.warn("音声の再生に失敗しました:", error);
+            }
+        }
+    }
+
+    // サウンドボタンの表示を更新
+    function updateSoundButton() {
+        const icon = document.querySelector('#sound-toggle i');
+        if (icon) {
+            icon.className = soundEnabled ? 'bi bi-volume-up-fill' : 'bi bi-volume-mute-fill';
+        }
     }
 
     // サウンドトグルボタンの処理
     document.getElementById('sound-toggle').addEventListener('click', () => {
         soundEnabled = !soundEnabled;
-        const icon = document.querySelector('#sound-toggle i');
-        icon.className = soundEnabled ? 'bi bi-volume-up-fill' : 'bi bi-volume-mute-fill';
+        updateSoundButton();
         
         // ユーザー操作によって初めて音声を再生可能にする（ブラウザの自動再生ポリシー対策）
-        if (soundEnabled) {
-            notificationSound.play().then(() => notificationSound.pause());
+        if (soundEnabled && notificationSound) {
+            notificationSound.play().then(() => notificationSound.pause()).catch(e => {
+                console.warn("音声の初期化に失敗しました:", e);
+            });
         }
     });
 
     // ページ読み込み時の処理
-    document.addEventListener('DOMContentLoaded', fetchOrders);
-    setInterval(fetchOrders, 15000); // 15秒ごとに更新
+    document.addEventListener('DOMContentLoaded', function() {
+        initSound(); // 音声ファイルの初期化
+        fetchOrders();
+        setInterval(fetchOrders, 15000); // 15秒ごとに更新
+    });
 </script>
 {% endblock %}
