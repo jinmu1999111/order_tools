@@ -61,7 +61,7 @@
 
 {% block scripts %}
 <script>
-    let soundEnabled = true;
+    let soundEnabled = false;
     let knownOrderIds = new Set();
     let notificationSound = null;
 
@@ -252,18 +252,20 @@
     }
     
     // サウンドを再生
-    function playSound() {
-        if (notificationSound && soundEnabled) {
-            try {
-                notificationSound.currentTime = 0;
-                notificationSound.play().catch(e => {
-                    console.warn("音声の再生に失敗しました:", e);
-                    soundEnabled = false;
-                    updateSoundButton();
-                });
-            } catch (error) {
-                console.warn("音声の再生に失敗しました:", error);
-            }
+     function playSound() {
+        if (!notificationSound || !soundEnabled) return; // 音声ファイルがないか、無効なら何もしない
+
+        notificationSound.currentTime = 0;
+        const playPromise = notificationSound.play();
+
+        if (playPromise !== undefined) {
+            playPromise.catch(error => {
+                console.warn("音声の再生に失敗しました。ユーザー操作が一度必要かもしれません。", error);
+                // 再生に失敗した場合、一度サウンドを無効にする
+                soundEnabled = false;
+                updateSoundButton();
+                showNotification('🔇 音声再生の許可が必要です。サウンドボタンを一度クリックしてください。', 'error');
+            });
         }
     }
 
