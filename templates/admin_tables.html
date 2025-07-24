@@ -42,13 +42,12 @@
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
-    // APIエラーハンドリング関数 (HTTPステータスがOKでない場合のみ呼び出す)
+    // APIエラーハンドリング関数
     const handleHttpError = async (response) => {
-        // 401 Unauthorized の場合は、ログインページにリダイレクト
         if (response.status === 401) {
             alert('セッションが切れました。再度ログインしてください。');
             window.location.href = '/login';
-            return true; // エラーが処理されたことを示す
+            return true;
         }
 
         console.error('API HTTPエラーレスポンス:', response);
@@ -57,10 +56,10 @@
             console.error('API HTTPエラーデータ:', errorData);
             alert(`エラー: ${errorData.message || 'サーバーエラーが発生しました。'}`);
         } catch (e) {
-            console.error('HTTPエラーレスポンスのパース失敗、またはネットワークエラー:', e);
+            console.error('HTTPエラーレスポンスのパース失敗:', e);
             alert('ネットワークエラーまたは不明なエラーが発生しました。');
         }
-        return true; // エラーが処理されたことを示す
+        return true;
     };
 
     function generateQRCode(containerId, token, size = 150) {
@@ -70,9 +69,14 @@
             return;
         }
         qrContainer.innerHTML = '';
-        if (token && token !== 'None') { // トークンが有効な場合にのみQRコードを生成
+        if (token && token !== 'None') {
             try {
-                new QRCode(qrContainer, { text: `${window.location.origin}/qr/${token}`, width: size, height: size, correctLevel: QRCode.CorrectLevel.H });
+                new QRCode(qrContainer, { 
+                    text: `${window.location.origin}/qr/${token}`, 
+                    width: size, 
+                    height: size, 
+                    correctLevel: QRCode.CorrectLevel.H 
+                });
                 console.log(`QR Code generated for container: ${containerId}, token: ${token}`);
             } catch (qrError) {
                 console.error(`Error generating QR Code for ${containerId} with token ${token}:`, qrError);
@@ -98,7 +102,6 @@
             colDiv.id = `table-card-${table.id}`;
 
             const expiryText = table.expiry ? `有効期限: ${new Date(table.expiry).toLocaleTimeString('ja-JP', {hour: '2-digit', minute:'2-digit'})}` : '';
-            // Ensure token is a string for JS, 'None' is a string from Jinja template if token is None.
             const tokenForEnlarge = table.token ? `'${table.token}'` : `'None'`; 
 
             colDiv.innerHTML = `
@@ -124,7 +127,6 @@
             tablesGrid.appendChild(colDiv);
             console.log(`Table card for ${table.name} (ID: ${table.id}) appended to DOM.`);
 
-            // Call generateQRCode after the element is in the DOM
             generateQRCode(`qrcode-${table.id}`, table.token); 
             console.log(`addTableCard completed for ${table.name} (ID: ${table.id}).`);
 
@@ -137,29 +139,25 @@
     async function refreshToken(tableId) {
         try {
             const response = await fetch(`/api/qr/generate/${tableId}`, { method: 'POST' });
-            // HTTPステータスがOKでない場合はエラーハンドラーを呼び出す
             if (!response.ok) {
                 await handleHttpError(response);
-                return; // 処理を中断
+                return;
             }
 
             const data = await response.json();
             if (data.success) {
                 generateQRCode(`qrcode-${tableId}`, data.token);
 
- // ★★★ 修正点 ★★★
-            // JSTとして日付をフォーマット
-            const expiryDate = new Date(data.expiry);
-            const expiryText = new Intl.DateTimeFormat('ja-JP', {
-                timeZone: 'Asia/Tokyo',
-                hour: '2-digit',
-                minute: '2-digit'
-            }).format(expiryDate);
+                // 日時をJSTでフォーマット
+                const expiryDate = new Date(data.expiry);
+                const expiryText = new Intl.DateTimeFormat('ja-JP', {
+                    timeZone: 'Asia/Tokyo',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }).format(expiryDate);
 
-            document.getElementById(`expiry-${tableId}`).textContent = `有効期限: ${expiryText}`;
-// ★★★ 修正ここまで ★★★
-
-                document.getElementById(`expiry-${tableId}`).textContent = `有効期限: ${new Date(data.expiry).toLocaleTimeString('ja-JP', {hour: '2-digit', minute:'2-digit'})}`;
+                document.getElementById(`expiry-${tableId}`).textContent = `有効期限: ${expiryText}`;
+                
                 const card = document.getElementById(`table-card-${tableId}`);
                 const tableName = card.querySelector('h5').textContent;
                 card.querySelector(`[onclick^="enlargeQR"]`).setAttribute('onclick', `enlargeQR('${tableName}', '${data.token}')`);
@@ -179,15 +177,12 @@
         if (!confirm('本当にこのテーブルを削除しますか？')) return;
         try {
             const response = await fetch(`/api/tables/${tableId}`, { method: 'DELETE' });
-            // HTTPステータスがOKでない場合はエラーハンドラーを呼び出す
             if (!response.ok) {
                 await handleHttpError(response);
-                return; // 処理を中断
+                return;
             }
 
-            // DELETEは通常成功時にdataを返さないことがあるため、response.okで判断
-            // ここに到達した時点でresponse.okはtrue
-            const data = await response.json().catch(() => ({ success: true })); // JSONがない場合も考慮
+            const data = await response.json().catch(() => ({ success: true }));
             if (data.success) {
                 document.getElementById(`table-card-${tableId}`).remove();
                 alert('テーブルを削除しました。');
@@ -207,22 +202,24 @@
         console.log('「追加」フォームが送信されました。');
         const name = document.getElementById('new_table_name').value;
         try {
-            const response = await fetch('/api/tables', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+            const response = await fetch('/api/tables', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ name }) 
+            });
             
-            // HTTPステータスがOKでない場合はエラーハンドラーを呼び出す
             if (!response.ok) {
                 await handleHttpError(response);
-                return; // 処理を中断
+                return;
             }
 
             const data = await response.json();
             if (data.success) {
                 alert('テーブルを追加しました。');
-                addTableCard(data); // ページリロードなしでテーブルを追加
-                document.getElementById('new_table_name').value = ''; // フォームをクリア
+                addTableCard(data);
+                document.getElementById('new_table_name').value = '';
                 console.log('テーブル追加成功:', data);
             } else {
-                // バックエンドが200 OKを返したが、論理的なエラーの場合
                 alert(data.message || 'テーブルの追加に失敗しました。');
                 console.error('テーブル追加失敗 (API論理エラー):', data);
             }
@@ -233,7 +230,10 @@
     });
 
     function enlargeQR(tableName, token) {
-        if (!token || token === 'None') { alert('先にQRコードを生成・更新してください。'); return; }
+        if (!token || token === 'None') { 
+            alert('先にQRコードを生成・更新してください。'); 
+            return; 
+        }
         document.getElementById('qr-modal-title').textContent = `${tableName} QRコード`;
         generateQRCode('qr-modal-body', token, 300);
         new bootstrap.Modal(document.getElementById('qr-modal')).show();
@@ -241,7 +241,6 @@
 
     document.addEventListener('DOMContentLoaded', () => {
         {% for table in tables %}
-            // 初期表示時にactive_qr_tokenが存在すればQRコードを生成
             generateQRCode('qrcode-{{ table.id }}', '{{ table.active_qr_token if table.active_qr_token else 'None' }}');
         {% endfor %}
     });
