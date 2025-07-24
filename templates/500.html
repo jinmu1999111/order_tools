@@ -6,6 +6,10 @@
     <h2>申し訳ございません</h2>
     <p class="lead">サーバーエラーが発生しました。</p>
     <p>しばらく時間をおいてから再度お試しください。</p>
-    <a href="{{ url_for('index') }}" class="btn btn-primary">ホームに戻る</a>
+    {% if current_user.is_authenticated %}
+        <a href="{{ url_for('dashboard') }}" class="btn btn-primary">ダッシュボードに戻る</a>
+    {% else %}
+        <a href="{{ url_for('index') }}" class="btn btn-primary">ホームに戻る</a>
+    {% endif %}
 </div>
 {% endblock %}
