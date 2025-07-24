@@ -82,8 +82,7 @@
                     {% set home_url = url_for('dashboard') %}
                 {% endif %}
                 <a class="navbar-brand" href="{{ home_url }}">Moi</a>
-                
-                <img id="cooking-animation" src="{{ url_for('static', filename='images/cooking_1.png') }}" alt="調理中アニメーション">
+                <img id="cooking-animation" src="{{ url_for('static', filename='images/cooking_1.png') }}" alt="調理中">
             </div>
             
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
@@ -96,7 +95,7 @@
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('kitchen') }}">キッチン</a></li>
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard') }}">ダッシュボード</a></li>
                         <li class="nav-item dropdown">
-                            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">運営メニュー</a>
+                            <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">運営メニュー</a>
                             <ul class="dropdown-menu dropdown-menu-end">
                                 <li><a class="dropdown-item" href="{{ url_for('admin_guidance') }}">案内管理</a></li>
                                 <li><a class="dropdown-item" href="{{ url_for('admin_menu') }}">メニュー管理</a></li>
@@ -150,10 +149,8 @@
                     tapCount++;
                     lastTapTime = currentTime;
                     console.log('Easter egg tap count:', tapCount);
-
                     if (tapCount >= requiredTaps) {
                         tapCount = 0;
-                        console.log('Easter egg activated! Redirecting to gallery...');
                         window.location.href = '/gallery';
                     }
                 }
@@ -203,7 +200,6 @@
                     console.error('Failed to check kitchen status:', error); 
                 }
             }
-
             checkKitchenStatus();
             setInterval(checkKitchenStatus, 15000);
         });
