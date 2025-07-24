@@ -445,6 +445,40 @@ def api_add_menu_item():
     return jsonify(success=True, item_id=item.id, name=item.name, price=item.price, category=category.name, active=item.active)
 
 @app.route('/api/menu/<int:item_id>', methods=['DELETE'])
+@app.route('/api/category/<int:category_id>', methods=['DELETE'])
+@login_required
+def api_delete_category(category_id):
+    """カテゴリとそれに属するすべてのメニューを削除"""
+    try:
+        category = db.session.get(Category, category_id)
+        if not category: 
+            return jsonify(success=False, message="カテゴリが見つかりません。"), 404
+        
+        # カテゴリ名を保存（削除前に）
+        category_name = category.name
+        
+        # カテゴリに属するメニュー数を取得（ログ用）
+        item_count = MenuItem.query.filter_by(category_id=category_id).count()
+        
+        # カテゴリを削除（CASCADE設定により、関連するMenuItemも自動削除される）
+        db.session.delete(category)
+        db.session.commit()
+        
+        print(f"カテゴリ '{category_name}' とそれに属する {item_count} 個のメニューを削除しました。")
+        
+        return jsonify(
+            success=True, 
+            message=f"カテゴリ '{category_name}' を削除しました。",
+            deleted_items=item_count
+        )
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"カテゴリ削除エラー: {str(e)}")
+        return jsonify(
+            success=False, 
+            message=f"カテゴリの削除中にエラーが発生しました: {str(e)}"
+        ), 500
 @login_required
 def api_delete_menu_item(item_id):
     item = db.session.get(MenuItem, item_id)
