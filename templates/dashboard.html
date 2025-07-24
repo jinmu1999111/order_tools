@@ -75,6 +75,76 @@
 <script>
     let salesChartInstance;
 
+ // --- 修正・追加ここから ---
+    
+    async function fetchDashboardData() {
+        try {
+            const response = await fetch('/api/dashboard/summary');
+            if (response.status === 401) return location.reload(); // 認証エラーならリロード
+            if (!response.ok) throw new Error('Network response was not ok.');
+            
+            const data = await response.json();
+            document.getElementById('today-sales').textContent = data.today_sales;
+            document.getElementById('order-count').textContent = data.today_orders;
+            document.getElementById('avg-spend').textContent = data.avg_spend;
+            document.getElementById('occupied-tables').textContent = data.occupied_tables;
+            document.getElementById('total-tables').textContent = data.total_tables;
+
+            const popularList = document.getElementById('popular-items-list');
+            popularList.innerHTML = ''; // 一旦クリア
+            if (data.popular_items && data.popular_items.length > 0) {
+                data.popular_items.forEach(item => {
+                    const li = document.createElement('li');
+                    li.className = 'list-group-item d-flex justify-content-between align-items-center';
+                    li.innerHTML = `${item.name} <span class="badge bg-primary rounded-pill">${item.count}</span>`;
+                    popularList.appendChild(li);
+                });
+            } else {
+                popularList.innerHTML = '<li class="list-group-item text-muted">データがありません</li>';
+            }
+        } catch (error) {
+            console.error('Failed to fetch dashboard summary:', error);
+        }
+    }
+
+    async function fetchSalesChartData() {
+        try {
+            const response = await fetch('/api/dashboard/sales?period=daily');
+            if (!response.ok) throw new Error('Network response was not ok.');
+            const data = await response.json();
+            renderSalesChart(data.labels, data.sales);
+        } catch (error) {
+            console.error('Failed to fetch sales chart data:', error);
+        }
+    }
+
+    function renderSalesChart(labels, salesData) {
+        const ctx = document.getElementById('salesChart').getContext('2d');
+        if (salesChartInstance) {
+            salesChartInstance.destroy();
+        }
+        salesChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '日次売上',
+                    data: salesData,
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    fill: true,
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+            }
+        });
+    }
+
+    // --- 修正・追加ここまで ---
+
     async function fetchDashboardData() { /* ...変更なし... */ }
     async function fetchSalesChartData() { /* ...変更なし... */ }
     function renderSalesChart(labels, salesData) { /* ...変更なし... */ }

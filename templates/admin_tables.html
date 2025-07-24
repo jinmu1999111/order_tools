@@ -146,6 +146,19 @@
             const data = await response.json();
             if (data.success) {
                 generateQRCode(`qrcode-${tableId}`, data.token);
+
+ // ★★★ 修正点 ★★★
+            // JSTとして日付をフォーマット
+            const expiryDate = new Date(data.expiry);
+            const expiryText = new Intl.DateTimeFormat('ja-JP', {
+                timeZone: 'Asia/Tokyo',
+                hour: '2-digit',
+                minute: '2-digit'
+            }).format(expiryDate);
+
+            document.getElementById(`expiry-${tableId}`).textContent = `有効期限: ${expiryText}`;
+// ★★★ 修正ここまで ★★★
+
                 document.getElementById(`expiry-${tableId}`).textContent = `有効期限: ${new Date(data.expiry).toLocaleTimeString('ja-JP', {hour: '2-digit', minute:'2-digit'})}`;
                 const card = document.getElementById(`table-card-${tableId}`);
                 const tableName = card.querySelector('h5').textContent;
