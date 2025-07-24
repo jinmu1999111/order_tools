@@ -445,40 +445,91 @@ def api_add_menu_item():
     return jsonify(success=True, item_id=item.id, name=item.name, price=item.price, category=category.name, active=item.active)
 
 @app.route('/api/menu/<int:item_id>', methods=['DELETE'])
-@app.route('/api/category/<int:category_id>', methods=['DELETE'])
 @login_required
-def api_delete_category(category_id):
-    """カテゴリとそれに属するすべてのメニューを削除"""
+def api_delete_menu_item(item_id):
+    """メニューアイテムを安全に削除（関連する注文データも考慮）"""
     try:
-        category = db.session.get(Category, category_id)
-        if not category: 
-            return jsonify(success=False, message="カテゴリが見つかりません。"), 404
+        item = db.session.get(MenuItem, item_id)
+        if not item:
+            return jsonify(success=False, message="メニューが見つかりません。"), 404
         
-        # カテゴリ名を保存（削除前に）
-        category_name = category.name
+        # メニュー名を保存（削除前に）
+        item_name = item.name
         
-        # カテゴリに属するメニュー数を取得（ログ用）
-        item_count = MenuItem.query.filter_by(category_id=category_id).count()
+        # このメニューを参照している注文があるかチェック
+        related_orders = Order.query.filter_by(item_name=item_name).count()
         
-        # カテゴリを削除（CASCADE設定により、関連するMenuItemも自動削除される）
-        db.session.delete(category)
+        if related_orders > 0:
+            # 注文履歴がある場合は、メニューを非表示にするだけ
+            item.active = False
+            db.session.commit()
+            
+            return jsonify(
+                success=True, 
+                message=f"メニュー '{item_name}' は注文履歴があるため非表示にしました。完全に削除するには注文履歴を先に削除してください。",
+                action="deactivated"
+            )
+        else:
+            # 注文履歴がない場合は完全削除
+            db.session.delete(item)
+            db.session.commit()
+            
+            return jsonify(
+                success=True, 
+                message=f"メニュー '{item_name}' を完全に削除しました。",
+                action="deleted"
+            )
+            
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error(f"メニュー削除エラー (ID: {item_id}): {str(e)}")
+        print(f"メニュー削除エラー (ID: {item_id}): {str(e)}")  # デバッグ用
+        
+        return jsonify(
+            success=False, 
+            message=f"メニューの削除中にエラーが発生しました: {str(e)}"
+        ), 500
+
+# 強制削除用の新しいAPI（管理者用）
+@app.route('/api/menu/<int:item_id>/force-delete', methods=['DELETE'])
+@login_required
+def api_force_delete_menu_item(item_id):
+    """メニューアイテムを強制削除（注文履歴も含めて）"""
+    try:
+        item = db.session.get(MenuItem, item_id)
+        if not item:
+            return jsonify(success=False, message="メニューが見つかりません。"), 404
+        
+        item_name = item.name
+        
+        # 関連する注文を削除
+        related_orders = Order.query.filter_by(item_name=item_name).all()
+        deleted_orders_count = len(related_orders)
+        
+        for order in related_orders:
+            db.session.delete(order)
+        
+        # メニューアイテムを削除
+        db.session.delete(item)
         db.session.commit()
-        
-        print(f"カテゴリ '{category_name}' とそれに属する {item_count} 個のメニューを削除しました。")
         
         return jsonify(
             success=True, 
-            message=f"カテゴリ '{category_name}' を削除しました。",
-            deleted_items=item_count
+            message=f"メニュー '{item_name}' と関連する {deleted_orders_count} 件の注文履歴を削除しました。",
+            action="force_deleted",
+            deleted_orders=deleted_orders_count
         )
         
     except Exception as e:
         db.session.rollback()
-        print(f"カテゴリ削除エラー: {str(e)}")
+        app.logger.error(f"メニュー強制削除エラー (ID: {item_id}): {str(e)}")
+        print(f"メニュー強制削除エラー (ID: {item_id}): {str(e)}")
+        
         return jsonify(
             success=False, 
-            message=f"カテゴリの削除中にエラーが発生しました: {str(e)}"
+            message=f"メニューの強制削除中にエラーが発生しました: {str(e)}"
         ), 500
+
 @login_required
 def api_delete_menu_item(item_id):
     item = db.session.get(MenuItem, item_id)
