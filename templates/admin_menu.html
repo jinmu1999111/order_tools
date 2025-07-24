@@ -246,12 +246,18 @@
             window.location.href = '/login';
             return true;
         }
+        
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        
         try {
             const errorData = await response.json();
-            alert(`エラー: ${errorData.message || 'サーバーエラーが発生しました。'}`);
+            errorMessage = errorData.message || errorMessage;
+            console.error('API Error Details:', errorData);
         } catch (e) {
-            alert('ネットワークエラーまたは不明なエラーが発生しました。');
+            console.error('Failed to parse error response:', e);
         }
+        
+        alert(`エラー: ${errorMessage}`);
         return true;
     };
 
@@ -424,9 +430,180 @@
         }
     }
 
-    // 初期化時に一括追加の行を5行作成
+    // 改良版メニュー削除関数
+    async function deleteItem(itemId) {
+        const itemRow = document.getElementById(`item-row-${itemId}`);
+        const itemName = itemRow ? itemRow.cells[1].textContent : 'unknown';
+        
+        if (!confirm(`メニュー「${itemName}」を削除しますか？\n\n注意: 注文履歴がある場合は非表示になります。`)) {
+            return;
+        }
+        
+        // ボタンを無効化してスピナーを表示
+        const deleteBtn = event.target;
+        const originalContent = deleteBtn.innerHTML;
+        deleteBtn.disabled = true;
+        deleteBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+        
+        try {
+            const response = await fetch(`/api/menu/${itemId}`, { 
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                if (response.status === 401) {
+                    alert('セッションが切れました。再度ログインしてください。');
+                    window.location.href = '/login';
+                    return;
+                }
+                
+                // サーバーエラーの詳細を取得
+                let errorMessage = 'サーバーエラーが発生しました。';
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.message || errorMessage;
+                } catch (e) {
+                    errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                }
+                
+                throw new Error(errorMessage);
+            }
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                if (data.action === 'deactivated') {
+                    // 非表示にされた場合
+                    showActionDialog(
+                        '非表示にしました',
+                        data.message,
+                        [
+                            {
+                                text: 'OK',
+                                class: 'btn-secondary',
+                                action: () => location.reload()
+                            },
+                            {
+                                text: '強制削除',
+                                class: 'btn-danger',
+                                action: () => forceDeleteItem(itemId, itemName)
+                            }
+                        ]
+                    );
+                } else {
+                    // 完全削除された場合
+                    alert(data.message);
+                    location.reload();
+                }
+            } else {
+                throw new Error(data.message || '削除に失敗しました。');
+            }
+            
+        } catch (error) {
+            console.error('Delete error:', error);
+            alert(`エラー: ${error.message}`);
+        } finally {
+            // ボタンを復元
+            deleteBtn.disabled = false;
+            deleteBtn.innerHTML = originalContent;
+        }
+    }
+
+    async function forceDeleteItem(itemId, itemName) {
+        if (!confirm(`本当にメニュー「${itemName}」を強制削除しますか？\n\n警告: 関連する注文履歴もすべて削除されます。この操作は取り消せません。`)) {
+            return;
+        }
+        
+        try {
+            const response = await fetch(`/api/menu/${itemId}/force-delete`, { 
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                await handleHttpError(response);
+                return;
+            }
+            
+            const data = await response.json();
+            if (data.success) {
+                alert(data.message);
+                location.reload();
+            } else {
+                throw new Error(data.message || '強制削除に失敗しました。');
+            }
+            
+        } catch (error) {
+            console.error('Force delete error:', error);
+            alert(`強制削除エラー: ${error.message}`);
+        }
+    }
+
+    // アクションダイアログを表示する関数
+    function showActionDialog(title, message, buttons) {
+        // 既存のモーダルがあれば削除
+        const existingModal = document.getElementById('actionModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // ボタンHTMLを生成
+        const buttonHtml = buttons.map(btn => 
+            `<button type="button" class="btn ${btn.class}" data-action="${btn.text}">${btn.text}</button>`
+        ).join('');
+        
+        // モーダルHTML
+        const modalHtml = `
+            <div class="modal fade" id="actionModal" tabindex="-1" aria-labelledby="actionModalLabel" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="actionModalLabel">${title}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p>${message}</p>
+                        </div>
+                        <div class="modal-footer">
+                            ${buttonHtml}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // モーダルをDOMに追加
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        const modal = new bootstrap.Modal(document.getElementById('actionModal'));
+        
+        // ボタンのイベントリスナーを追加
+        buttons.forEach(btn => {
+            const buttonElement = document.querySelector(`[data-action="${btn.text}"]`);
+            buttonElement.addEventListener('click', () => {
+                modal.hide();
+                if (btn.action) {
+                    btn.action();
+                }
+            });
+        });
+        
+        modal.show();
+        
+        // モーダルが閉じられたときにDOMから削除
+        document.getElementById('actionModal').addEventListener('hidden.bs.modal', function () {
+            this.remove();
+        });
+    }
+
+    // 初期化処理
     document.addEventListener('DOMContentLoaded', function () {
-        // 既存の初期化コード
+        // ソート機能の初期化
         const categoryContainer = document.getElementById('category-container');
         if (categoryContainer) {
             new Sortable(categoryContainer, {
@@ -503,7 +680,7 @@
         });
     });
     
-    // 既存の関数群（変更なし）
+    // 単品追加フォーム
     document.getElementById('add-menu-form').addEventListener('submit', async function(e) {
         e.preventDefault();
         const form = e.target;
@@ -535,196 +712,32 @@
         }
     });
 
-async function deleteItem(itemId) {
-    const itemRow = document.getElementById(`item-row-${itemId}`);
-    const itemName = itemRow ? itemRow.cells[1].textContent : 'unknown';
-    
-    if (!confirm(`メニュー「${itemName}」を削除しますか？\n\n注意: 注文履歴がある場合は非表示になります。`)) {
-        return;
-    }
-    
-    // ボタンを無効化してスピナーを表示
-    const deleteBtn = event.target;
-    const originalContent = deleteBtn.innerHTML;
-    deleteBtn.disabled = true;
-    deleteBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
-    
-    try {
-        const response = await fetch(`/api/menu/${itemId}`, { 
-            method: 'DELETE',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        if (!response.ok) {
-            if (response.status === 401) {
-                alert('セッションが切れました。再度ログインしてください。');
-                window.location.href = '/login';
+    // 表示/非表示切り替え
+    async function toggleActive(itemId) {
+        try {
+            const response = await fetch(`/api/menu/toggle/${itemId}`, { method: 'POST' });
+            if (!response.ok) {
+                await handleHttpError(response);
                 return;
             }
-            
-            // サーバーエラーの詳細を取得
-            let errorMessage = 'サーバーエラーが発生しました。';
-            try {
-                const errorData = await response.json();
-                errorMessage = errorData.message || errorMessage;
-            } catch (e) {
-                errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-            }
-            
-            throw new Error(errorMessage);
-        }
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            if (data.action === 'deactivated') {
-                // 非表示にされた場合
-                showActionDialog(
-                    '非表示にしました',
-                    data.message,
-                    [
-                        {
-                            text: 'OK',
-                            class: 'btn-secondary',
-                            action: () => location.reload()
-                        },
-                        {
-                            text: '強制削除',
-                            class: 'btn-danger',
-                            action: () => forceDeleteItem(itemId, itemName)
-                        }
-                    ]
-                );
+            const data = await response.json();
+            if (data.success) {
+                const activeBadge = document.getElementById(`active-badge-${itemId}`);
+                if (activeBadge) {
+                    if (data.active) {
+                        activeBadge.classList.replace('bg-secondary', 'bg-success');
+                        activeBadge.textContent = '表示中';
+                    } else {
+                        activeBadge.classList.replace('bg-success', 'bg-secondary');
+                        activeBadge.textContent = '非表示';
+                    }
+                }
             } else {
-                // 完全削除された場合
-                alert(data.message);
-                location.reload();
+                alert(data.message || '状態の切り替えに失敗しました。');
             }
-        } else {
-            throw new Error(data.message || '削除に失敗しました。');
+        } catch (error) {
+            alert('状態の切り替え中にエラーが発生しました。');
         }
-        
-    } catch (error) {
-        console.error('Delete error:', error);
-        alert(`エラー: ${error.message}`);
-    } finally {
-        // ボタンを復元
-        deleteBtn.disabled = false;
-        deleteBtn.innerHTML = originalContent;
     }
-}
-async function forceDeleteItem(itemId, itemName) {
-    if (!confirm(`本当にメニュー「${itemName}」を強制削除しますか？\n\n警告: 関連する注文履歴もすべて削除されます。この操作は取り消せません。`)) {
-        return;
-    }
-    
-    try {
-        const response = await fetch(`/api/menu/${itemId}/force-delete`, { 
-            method: 'DELETE',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        if (!response.ok) {
-            await handleHttpError(response);
-            return;
-        }
-        
-        const data = await response.json();
-        if (data.success) {
-            alert(data.message);
-            location.reload();
-        } else {
-            throw new Error(data.message || '強制削除に失敗しました。');
-        }
-        
-    } catch (error) {
-        console.error('Force delete error:', error);
-        alert(`強制削除エラー: ${error.message}`);
-    }
-}
-
-// アクションダイアログを表示する関数
-function showActionDialog(title, message, buttons) {
-    // 既存のモーダルがあれば削除
-    const existingModal = document.getElementById('actionModal');
-    if (existingModal) {
-        existingModal.remove();
-    }
-    
-    // ボタンHTMLを生成
-    const buttonHtml = buttons.map(btn => 
-        `<button type="button" class="btn ${btn.class}" data-action="${btn.text}">${btn.text}</button>`
-    ).join('');
-    
-    // モーダルHTML
-    const modalHtml = `
-        <div class="modal fade" id="actionModal" tabindex="-1" aria-labelledby="actionModalLabel" aria-hidden="true">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="actionModalLabel">${title}</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body">
-                        <p>${message}</p>
-                    </div>
-                    <div class="modal-footer">
-                        ${buttonHtml}
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    // モーダルをDOMに追加
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-    
-    const modal = new bootstrap.Modal(document.getElementById('actionModal'));
-    
-    // ボタンのイベントリスナーを追加
-    buttons.forEach(btn => {
-        const buttonElement = document.querySelector(`[data-action="${btn.text}"]`);
-        buttonElement.addEventListener('click', () => {
-            modal.hide();
-            if (btn.action) {
-                btn.action();
-            }
-        });
-    });
-    
-    modal.show();
-    
-    // モーダルが閉じられたときにDOMから削除
-    document.getElementById('actionModal').addEventListener('hidden.bs.modal', function () {
-        this.remove();
-    });
-}
-
-// === 3. 既存の handleHttpError 関数がある場合は置き換え、ない場合は追加 ===
-const handleHttpError = async (response) => {
-    if (response.status === 401) {
-        alert('セッションが切れました。再度ログインしてください。');
-        window.location.href = '/login';
-        return true;
-    }
-    
-    let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-    
-    try {
-        const errorData = await response.json();
-        errorMessage = errorData.message || errorMessage;
-        console.error('API Error Details:', errorData);
-    } catch (e) {
-        console.error('Failed to parse error response:', e);
-    }
-    
-    alert(`エラー: ${errorMessage}`);
-    return true;
-};
-
 </script>
 {% endblock %}

@@ -92,6 +92,10 @@ class Table(db.Model):
     status = db.Column(db.String(20), default='available')
     active_qr_token = db.Column(db.String(100), unique=True, nullable=True)
     qr_token_expiry = db.Column(db.DateTime(timezone=True), nullable=True)
+    # QRコード固有のセッションID（テーブル単位で永続化）
+    persistent_session_id = db.Column(db.String(100), nullable=True)
+    # 最後にアクセスされた時刻
+    last_accessed = db.Column(db.DateTime(timezone=True), nullable=True)
     orders = db.relationship('Order', backref='table', lazy='dynamic', cascade="all, delete-orphan")
 
 class Order(db.Model):
@@ -101,7 +105,10 @@ class Order(db.Model):
     status = db.Column(db.String(20), default='pending')
     timestamp = db.Column(db.DateTime(timezone=True), default=lambda: datetime.datetime.now(JST))
     table_id = db.Column(db.Integer, db.ForeignKey('table.id'), nullable=False)
-    session_id = db.Column(db.String(100))
+    # テーブルの永続セッションIDを参照
+    persistent_session_id = db.Column(db.String(100), nullable=True)
+    # 個別セッション（同じテーブルでも複数グループが注文する場合用）
+    individual_session_id = db.Column(db.String(100), nullable=True)
 
 class TempQRToken(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -129,14 +136,21 @@ def init_database():
                 db.session.add(admin_user)
                 print("管理者アカウントを作成しました: admin / password123")
             
-            # サンプルテーブルの作成
+            # サンプルテーブルの作成（永続セッションID付き）
             if Table.query.count() == 0:
                 for i in range(1, 6):
                     table = Table(name=f'{i}番テーブル')
                     table.active_qr_token = secrets.token_urlsafe(16)
-                    table.qr_token_expiry = datetime.datetime.now(JST) + datetime.timedelta(hours=8)
+                    table.qr_token_expiry = datetime.datetime.now(JST) + datetime.timedelta(hours=5)  # 5時間
+                    table.persistent_session_id = secrets.token_hex(16)  # 永続セッションID追加
                     db.session.add(table)
                 print("サンプルテーブルを作成しました。")
+            
+            # 既存テーブルに永続セッションIDを追加（マイグレーション用）
+            existing_tables = Table.query.filter_by(persistent_session_id=None).all()
+            for table in existing_tables:
+                table.persistent_session_id = secrets.token_hex(16)
+                print(f"テーブル '{table.name}' に永続セッションIDを追加しました。")
             
             db.session.commit()
             print("データベースの初期化・更新が完了しました。")
@@ -154,26 +168,49 @@ def index():
 
 @app.route('/qr/<token>')
 def qr_auth(token):
+    # 一時QRトークンの処理
     temp_token = TempQRToken.query.filter_by(token=token).first()
     if temp_token and temp_token.is_valid():
         table = Table.query.filter_by(name=temp_token.table_name).first()
         if not table:
             table = Table(name=temp_token.table_name)
+            # 新しいテーブルには新しい永続セッションIDを付与
+            table.persistent_session_id = secrets.token_hex(16)
             db.session.add(table)
             db.session.flush()
+        
+        # テーブルの永続セッションIDを使用
+        if not table.persistent_session_id:
+            table.persistent_session_id = secrets.token_hex(16)
+        
         session['table_id'] = table.id
-        session['session_id'] = secrets.token_hex(16)
+        session['persistent_session_id'] = table.persistent_session_id
+        session['individual_session_id'] = secrets.token_hex(8)  # 短めの個別ID
+        
         table.status = 'occupied'
+        table.last_accessed = datetime.datetime.now(JST)
         temp_token.used = True
         db.session.commit()
+        
         return redirect(url_for('table_menu', table_id=table.id))
+    
+    # 通常のテーブルQRトークンの処理
     table = Table.query.filter_by(active_qr_token=token).first()
     if table and (not table.qr_token_expiry or table.qr_token_expiry > datetime.datetime.now(JST)):
-        session['session_id'] = secrets.token_hex(16)
+        # 既存の永続セッションIDを使用（なければ新規作成）
+        if not table.persistent_session_id:
+            table.persistent_session_id = secrets.token_hex(16)
+        
         session['table_id'] = table.id
+        session['persistent_session_id'] = table.persistent_session_id
+        session['individual_session_id'] = secrets.token_hex(8)
+        
         table.status = 'occupied'
+        table.last_accessed = datetime.datetime.now(JST)
         db.session.commit()
+        
         return redirect(url_for('table_menu', table_id=table.id))
+    
     flash('QRコードが無効か期限切れです。', 'danger')
     return redirect(url_for('index'))
 
@@ -319,27 +356,71 @@ def admin_security():
 def submit_order():
     data = request.json
     table_id = session.get('table_id')
-    session_id = session.get('session_id')
+    persistent_session_id = session.get('persistent_session_id')
+    individual_session_id = session.get('individual_session_id')
     items = data.get('items')
-    if not all([table_id, session_id, items]): return jsonify(success=False, message="セッション情報が無効です。"), 400
+    
+    if not all([table_id, persistent_session_id, items]): 
+        return jsonify(success=False, message="セッション情報が無効です。"), 400
+    
     for item_id, item_data in items.items():
         menu_item = db.session.get(MenuItem, int(item_id))
         if menu_item and item_data.get('quantity', 0) > 0:
             for _ in range(item_data['quantity']):
-                order = Order(item_name=menu_item.name, item_price=menu_item.price, table_id=table_id, session_id=session_id)
+                order = Order(
+                    item_name=menu_item.name, 
+                    item_price=menu_item.price, 
+                    table_id=table_id, 
+                    persistent_session_id=persistent_session_id,
+                    individual_session_id=individual_session_id
+                )
                 db.session.add(order)
             menu_item.popularity_count += item_data['quantity']
+    
+    # テーブルの最終アクセス時刻を更新
+    table = db.session.get(Table, table_id)
+    if table:
+        table.last_accessed = datetime.datetime.now(JST)
+    
     db.session.commit()
     return jsonify(success=True)
 
 @app.route('/api/customer/orders')
 def api_customer_orders():
-    if 'session_id' in session:
-        orders = Order.query.filter_by(session_id=session['session_id']).order_by(Order.timestamp.asc()).all()
-        order_list = [{'name': o.item_name, 'price': o.item_price, 'status': o.status} for o in orders]
-        total = sum(o.item_price for o in orders if o.status != 'cancelled')
-        return jsonify(success=True, orders=order_list, total=total)
-    return jsonify(success=False, message="注文履歴がありません。")
+    persistent_session_id = session.get('persistent_session_id')
+    table_id = session.get('table_id')
+    show_all = request.args.get('show_all', 'false').lower() == 'true'
+    
+    if not persistent_session_id or not table_id:
+        return jsonify(success=False, message="セッション情報がありません。")
+    
+    if show_all:
+        # テーブル全体の注文履歴（すべてのセッション）
+        orders = Order.query.filter_by(persistent_session_id=persistent_session_id).order_by(Order.timestamp.asc()).all()
+    else:
+        # 現在のセッションの注文履歴のみ
+        individual_session_id = session.get('individual_session_id')
+        if individual_session_id:
+            orders = Order.query.filter_by(
+                persistent_session_id=persistent_session_id,
+                individual_session_id=individual_session_id
+            ).order_by(Order.timestamp.asc()).all()
+        else:
+            # フォールバック: テーブル全体
+            orders = Order.query.filter_by(persistent_session_id=persistent_session_id).order_by(Order.timestamp.asc()).all()
+    
+    order_list = []
+    for o in orders:
+        order_list.append({
+            'name': o.item_name, 
+            'price': o.item_price, 
+            'status': o.status,
+            'timestamp': o.timestamp.strftime('%H:%M'),
+            'is_current_session': o.individual_session_id == session.get('individual_session_id')
+        })
+    
+    total = sum(o.item_price for o in orders if o.status != 'cancelled')
+    return jsonify(success=True, orders=order_list, total=total)
 
 @app.route('/api/kitchen/orders')
 @login_required
@@ -372,7 +453,8 @@ def update_order_status(order_id):
 @app.route('/api/order/complete/<session_id>', methods=['POST'])
 @login_required
 def api_complete_order(session_id):
-    orders = Order.query.filter_by(session_id=session_id, status='ready').all()
+    # 永続セッションIDで検索
+    orders = Order.query.filter_by(persistent_session_id=session_id, status='ready').all()
     if not orders: return jsonify(success=False, message="対象の注文が見つかりません。"), 404
     for order in orders: order.status = 'served'
     db.session.commit()
@@ -396,7 +478,12 @@ def api_generate_table_qr(table_id):
     table = db.session.get(Table, table_id)
     if not table: return jsonify(success=False, message="Table not found"), 404
     table.active_qr_token = secrets.token_urlsafe(16)
-    table.qr_token_expiry = datetime.datetime.now(JST) + datetime.timedelta(hours=8)
+    table.qr_token_expiry = datetime.datetime.now(JST) + datetime.timedelta(hours=5)  # 5時間
+    
+    # 永続セッションIDがなければ作成
+    if not table.persistent_session_id:
+        table.persistent_session_id = secrets.token_hex(16)
+    
     db.session.commit()
     return jsonify(success=True, token=table.active_qr_token, expiry=table.qr_token_expiry.isoformat())
 
@@ -409,7 +496,8 @@ def api_add_table():
     if Table.query.filter_by(name=name).first(): return jsonify(success=False, message='Table name already exists'), 400
     new_table = Table(name=name)
     new_table.active_qr_token = secrets.token_urlsafe(16)
-    new_table.qr_token_expiry = datetime.datetime.now(JST) + datetime.timedelta(hours=8)
+    new_table.qr_token_expiry = datetime.datetime.now(JST) + datetime.timedelta(hours=5)  # 5時間
+    new_table.persistent_session_id = secrets.token_hex(16)  # 永続セッションID追加
     db.session.add(new_table)
     db.session.commit()
     return jsonify(success=True, id=new_table.id, name=new_table.name, token=new_table.active_qr_token, expiry=new_table.qr_token_expiry.isoformat())
@@ -490,7 +578,6 @@ def api_delete_menu_item(item_id):
             message=f"メニューの削除中にエラーが発生しました: {str(e)}"
         ), 500
 
-# 強制削除用の新しいAPI（管理者用）
 @app.route('/api/menu/<int:item_id>/force-delete', methods=['DELETE'])
 @login_required
 def api_force_delete_menu_item(item_id):
@@ -530,13 +617,40 @@ def api_force_delete_menu_item(item_id):
             message=f"メニューの強制削除中にエラーが発生しました: {str(e)}"
         ), 500
 
+@app.route('/api/category/<int:category_id>', methods=['DELETE'])
 @login_required
-def api_delete_menu_item(item_id):
-    item = db.session.get(MenuItem, item_id)
-    if not item: return jsonify(success=False, message="Item not found"), 404
-    db.session.delete(item)
-    db.session.commit()
-    return jsonify(success=True)
+def api_delete_category(category_id):
+    """カテゴリとそれに属するすべてのメニューを削除"""
+    try:
+        category = db.session.get(Category, category_id)
+        if not category: 
+            return jsonify(success=False, message="カテゴリが見つかりません。"), 404
+        
+        # カテゴリ名を保存（削除前に）
+        category_name = category.name
+        
+        # カテゴリに属するメニュー数を取得（ログ用）
+        item_count = MenuItem.query.filter_by(category_id=category_id).count()
+        
+        # カテゴリを削除（CASCADE設定により、関連するMenuItemも自動削除される）
+        db.session.delete(category)
+        db.session.commit()
+        
+        print(f"カテゴリ '{category_name}' とそれに属する {item_count} 個のメニューを削除しました。")
+        
+        return jsonify(
+            success=True, 
+            message=f"カテゴリ '{category_name}' を削除しました。",
+            deleted_items=item_count
+        )
+        
+    except Exception as e:
+        db.session.rollback()
+        print(f"カテゴリ削除エラー: {str(e)}")
+        return jsonify(
+            success=False, 
+            message=f"カテゴリの削除中にエラーが発生しました: {str(e)}"
+        ), 500
 
 @app.route('/api/menu/toggle/<int:item_id>', methods=['POST'])
 @login_required
