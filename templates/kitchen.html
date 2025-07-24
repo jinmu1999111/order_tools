@@ -140,12 +140,11 @@
             });
 
             let actionButton = '';
-            if (order.status === 'pending') {
-                actionButton = `<button class="btn btn-primary w-100" onclick="updateStatus(${order.id}, 'preparing')">調理開始</button>`;
-            } else if (order.status === 'preparing') {
-                actionButton = `<button class="btn btn-success w-100" onclick="updateStatus(${order.id}, 'served')">完了</button>`; // servedに直接変更
+            // pending と preparing の両方で「完了」ボタンを表示し、served に変更
+            if (order.status === 'pending' || order.status === 'preparing') {
+                actionButton = `<button class="btn btn-success w-100" onclick="updateStatus(${order.id}, 'served')">完了</button>`;
             }
-            // readyは表示しない
+            // ready は表示しない (served に直接移行するため)
             
             card.innerHTML = `
                 <div class="card h-100 order-card status-${order.status}">
