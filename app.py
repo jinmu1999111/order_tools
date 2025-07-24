@@ -16,7 +16,10 @@ from flask_migrate import Migrate
 app = Flask(__name__)
 
 # SECRET_KEYの強化
-app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if not SECRET_KEY:
+    raise ValueError("No SECRET_KEY set for Flask application. Please set it in the environment variables.")
+app.secret_key = SECRET_KEY
 
 # データベース設定の改善
 db_url = os.environ.get('DATABASE_URL')
