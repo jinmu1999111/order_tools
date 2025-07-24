@@ -2,7 +2,7 @@
 <div class="menu-section">
     <h2 class="section-title">{{ category_data.category_name }}</h2>
     <div class="row justify-content-center">
-        {% for item in category_data.items %}
+        {% for item in category_data.item_list %}
         <div class="col-md-6 col-lg-4">
             {% include '_menu_item.html' %}
         </div>

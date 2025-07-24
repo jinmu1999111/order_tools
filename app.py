@@ -16,12 +16,10 @@ from flask_migrate import Migrate
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'your-fixed-secret-key-change-this-in-production-1234567890')
 
-# RenderのPostgreSQL URLは 'postgres://' で始まるため、SQLAlchemyが認識できる 'postgresql://' に置換する
 db_url = os.environ.get('DATABASE_URL')
 if db_url and db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
 
-# SQLiteの場合のフォールバック
 if not db_url:
     db_url = 'sqlite:///instance/test.db'
 
@@ -141,14 +139,16 @@ def qr_auth(token):
 def get_menu_data(sort_by='category'):
     if sort_by == 'popularity':
         items = MenuItem.query.filter_by(active=True).order_by(MenuItem.popularity_count.desc()).all()
-        return {'items': items}
+        # ★★★ 修正箇所 ★★★
+        return {'item_list': items}
     else:
         sorted_categories = Category.query.order_by(Category.sort_order).all()
         categorized_menu = []
         for category in sorted_categories:
             items = MenuItem.query.filter_by(active=True, category_id=category.id).order_by(MenuItem.sort_order).all()
             if items:
-                categorized_menu.append({'category_name': category.name, 'items': items})
+                # ★★★ 修正箇所 ★★★
+                categorized_menu.append({'category_name': category.name, 'item_list': items})
         return {'categorized_menu': categorized_menu}
 
 @app.route('/table/<int:table_id>')
@@ -165,7 +165,8 @@ def table_menu_partial(table_id):
     sort_by = request.args.get('sort_by', 'category')
     menu_data = get_menu_data(sort_by)
     if sort_by == 'popularity':
-        return render_template('_menu_popular.html', items=menu_data['items'])
+        # ★★★ 修正箇所 ★★★
+        return render_template('_menu_popular.html', items=menu_data['item_list'])
     else:
         return render_template('_menu_category.html', categorized_menu=menu_data['categorized_menu'])
 
@@ -218,8 +219,13 @@ def admin_menu():
     categorized_items = []
     for category in sorted_categories:
         items = MenuItem.query.filter_by(category_id=category.id).order_by(MenuItem.sort_order).all()
-        categorized_items.append({'category_obj': category, 'items': items})
+        # ★★★ 修正箇所 ★★★
+        categorized_items.append({'category_obj': category, 'item_list': items})
     return render_template('admin_menu.html', categorized_items=categorized_items)
+
+# ( ... その他のルートは変更なし ... )
+# ( ... 省略 ... )
+# ( ... ファイルの末尾まで変更なし ... )
 
 @app.route('/admin/tables')
 @login_required

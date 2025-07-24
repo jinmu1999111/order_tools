@@ -5,8 +5,8 @@
 <style>
     .page-container { max-width: 1200px; margin: 0 auto; }
     .card-header h2 { font-size: 1.8rem; margin-bottom: 0; }
-    .category-block { 
-        margin-bottom: 2rem; 
+    .category-block {
+        margin-bottom: 2rem;
         border: 1px solid #dee2e6;
         border-radius: .375rem;
         padding: 1rem;
@@ -17,7 +17,7 @@
         border-bottom: 2px solid var(--color-primary);
         padding-bottom: 0.5rem;
         margin-bottom: 1rem;
-        cursor: grab; /* カテゴリ全体を掴めるように見せる */
+        cursor: grab;
     }
     .sortable-item {
         cursor: grab;
@@ -88,7 +88,7 @@
                                 </tr>
                             </thead>
                             <tbody class="sortable-list" id="category-list-{{ cat_data.category_obj.id }}">
-                                {% for item in cat_data.items %}
+                                {% for item in cat_data.item_list %}
                                 <tr id="item-row-{{ item.id }}" data-id="{{ item.id }}" class="sortable-item">
                                     <td><i class="bi bi-grip-vertical"></i></td>
                                     <td>{{ item.name }}</td>
@@ -111,7 +111,7 @@
                     </div>
                 </div>
             {% endfor %}
-            <div id="no-categories-message" class="text-center py-4 text-muted" style="display: {% if categorized_items %}none{% else %}block{% endif %};">
+            <div id="no-categories-message" class="text-center py-4 text-muted" style="display: {% if not categorized_items %}block{% else %}none{% endif %};">
                 <p>まだメニューがありません。追加してください。</p>
             </div>
         </div>
@@ -121,9 +121,7 @@
 
 {% block scripts %}
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-
 <script>
-    // APIエラーハンドリング関数 (HTTPステータスがOKでない場合のみ呼び出す)
     const handleHttpError = async (response) => {
         if (response.status === 401) {
             alert('セッションが切れました。再度ログインしてください。');
@@ -138,20 +136,15 @@
         }
         return true;
     };
-
     document.addEventListener('DOMContentLoaded', function () {
-        // ★★★ 修正箇所 ★★★
-        // カテゴリの並び替えを有効化
         const categoryContainer = document.getElementById('category-container');
         if (categoryContainer) {
             new Sortable(categoryContainer, {
                 animation: 150,
-                handle: '.category-title', // カテゴリ名をドラッグハンドルにする
+                handle: '.category-title',
                 ghostClass: 'category-sortable-ghost',
             });
         }
-
-        // 各カテゴリ内のアイテムの並び替えを有効化
         document.querySelectorAll('.sortable-list').forEach(list => {
             new Sortable(list, {
                 animation: 150,
@@ -159,15 +152,11 @@
                 handle: '.bi-grip-vertical',
             });
         });
-
-        // 「並び順を保存」ボタンの処理
         document.getElementById('save-order-btn').addEventListener('click', async function() {
             const btn = this;
             btn.disabled = true;
             btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 保存中...';
-
             try {
-                // 1. カテゴリの並び順を保存
                 const categoryBlocks = document.querySelectorAll('.category-block');
                 const categoryIds = Array.from(categoryBlocks).map(block => block.dataset.categoryId);
                 
@@ -181,7 +170,6 @@
                     throw new Error('Category order save failed');
                 }
 
-                // 2. アイテムの並び順を保存
                 const allItems = document.querySelectorAll('.sortable-item');
                 const itemIds = Array.from(allItems).map(item => item.dataset.id);
 
@@ -197,10 +185,8 @@
                 }
                 
                 alert('すべての並び順を保存しました。');
-
             } catch (error) {
                 console.error('保存処理中にエラーが発生:', error);
-                // エラーメッセージはhandleHttpErrorで表示されるので、ここでは追加のアラートは不要
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = '<i class="bi bi-check-lg"></i> すべての並び順を保存';
@@ -208,8 +194,6 @@
         });
     });
     
-    // メニュー追加時のDOM操作 (ページリロードで対応するため、この関数は削除または簡素化)
-    // 今回はリロードで対応するのが最も簡単で確実なため、成功時にリロードする方式に変更します。
     document.getElementById('add-menu-form').addEventListener('submit', async function(e) {
         e.preventDefault();
         const form = e.target;
@@ -232,7 +216,7 @@
             const data = await response.json();
             if (data.success) {
                 alert('メニューを追加しました。ページを更新します。');
-                location.reload(); // ★★★ 変更点: ページをリロードして新しいカテゴリ/アイテムを表示
+                location.reload();
             } else {
                 alert(data.message || '追加に失敗しました。');
             }
@@ -251,7 +235,7 @@
                 return;
             }
             alert('メニューを削除しました。');
-            location.reload(); // ★★★ 変更点: ページをリロードして反映
+            location.reload();
         } catch (error) {
             alert('メニューの削除中にエラーが発生しました。');
         }
@@ -276,7 +260,7 @@
                         activeBadge.textContent = '非表示';
                     }
                 }
-                alert('表示状態を切り替えました。');
+                // alert('表示状態を切り替えました。');
             } else {
                 alert(data.message || '状態の切り替えに失敗しました。');
             }
