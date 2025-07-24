@@ -17,7 +17,7 @@
     }
     .order-card.status-pending { border-left-color: #FFB74D; }
     .order-card.status-preparing { border-left-color: #64B5F6; }
-    .order-card.status-ready { border-left-color: #81C784; }
+    /* servedになったら非表示になるため、readyのスタイルは不要になる */
 </style>
 {% endblock %}
 
@@ -30,26 +30,25 @@
 
     <div class="row kitchen-header mb-4">
         <div class="col-6 col-md-3 stat-item">
-            <div class="stat-number" id="pending-count">0</div>
+            <div class="stat-number" id="pending-count">{{ stats.pending_orders or 0 }}</div>
             <div>調理待ち</div>
         </div>
         <div class="col-6 col-md-3 stat-item">
-            <div class="stat-number" id="preparing-count">0</div>
+            <div class="stat-number" id="preparing-count">{{ stats.preparing_orders or 0 }}</div>
             <div>調理中</div>
         </div>
         <div class="col-6 col-md-3 stat-item">
-            <div class="stat-number" id="ready-count">0</div>
+            <div class="stat-number" id="ready-count">--</div> {# 提供準備OKは画面から消えるので表示不要 #}
             <div>提供準備OK</div>
         </div>
         <div class="col-6 col-md-3 stat-item">
-            <div class="stat-number" id="total-count">0</div>
+            <div class="stat-number" id="total-count">{{ stats.total_orders or 0 }}</div>
             <div>本日の注文件数</div>
         </div>
     </div>
 
     <div class="orders-grid row" id="orders-grid">
-        <!-- 注文カードがここに動的に生成される -->
-    </div>
+        </div>
     <div class="text-center p-5" id="empty-state" style="display: none;">
         <h3>現在の注文はありません</h3>
     </div>
@@ -112,7 +111,8 @@
     function updateStats(stats) {
         document.getElementById('pending-count').textContent = stats.pending_orders || 0;
         document.getElementById('preparing-count').textContent = stats.preparing_orders || 0;
-        document.getElementById('ready-count').textContent = stats.ready_orders || 0;
+        // ready-countはHTMLで削除されているか、常に非表示にする
+        document.getElementById('ready-count').textContent = '--'; 
         document.getElementById('total-count').textContent = stats.total_orders || 0;
     }
 
@@ -141,13 +141,12 @@
 
             let actionButton = '';
             if (order.status === 'pending') {
-                actionButton = `<button class="btn btn-primary w-100" onclick="updateStatus('${order.id}', 'preparing')">調理開始</button>`;
+                actionButton = `<button class="btn btn-primary w-100" onclick="updateStatus(${order.id}, 'preparing')">調理開始</button>`;
             } else if (order.status === 'preparing') {
-                actionButton = `<button class="btn btn-success w-100" onclick="updateStatus('${order.id}', 'ready')">提供OK</button>`;
-            } else if (order.status === 'ready') {
-                actionButton = `<p class="text-success text-center mb-0">配膳待ち</p>`;
+                actionButton = `<button class="btn btn-success w-100" onclick="updateStatus(${order.id}, 'served')">完了</button>`; // servedに直接変更
             }
-
+            // readyは表示しない
+            
             card.innerHTML = `
                 <div class="card h-100 order-card status-${order.status}">
                     <div class="card-body d-flex flex-column">
@@ -176,7 +175,7 @@
             if (response.ok) {
                 if (soundEnabled) playSound();
                 showNotification('ステータスを更新しました', 'success');
-                fetchOrders();
+                fetchOrders(); // 画面を更新して完了した伝票を消す
             } else {
                 const data = await response.json();
                 showNotification(data.message || 'ステータスの更新に失敗しました', 'error');
@@ -229,4 +228,3 @@
     document.addEventListener('DOMContentLoaded', fetchOrders);
     setInterval(fetchOrders, 15000); // 15秒ごとに更新
 </script>
-{% endblock %}

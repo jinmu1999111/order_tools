@@ -17,7 +17,8 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'your-fixed-secret-key-change-this-in-production-1234567890')
 db_url = os.environ.get('DATABASE_URL', 'sqlite:///instance/test.db')
 if db_url.startswith("postgres://"):
-    db_url = db_url.replace("postgres://", "postgresql://", 1)
+    db_url = db.url.URL.create("postgresql", username=db_url.username, password=db_url.password,
+                              host=db_url.host, port=db_url.port, database=db_url.database)
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(hours=8)
@@ -178,22 +179,23 @@ def logout():
 @app.route('/kitchen')
 @login_required
 def kitchen():
-    # 初期統計データを計算
+    # 初期統計データを計算 (ここではまだ全てのステータスを計算)
     today_start = datetime.datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)
     
     pending_orders = Order.query.filter_by(status='pending').count()
     preparing_orders = Order.query.filter_by(status='preparing').count()
-    ready_orders = Order.query.filter_by(status='ready').count()
+    ready_orders = Order.query.filter_by(status='ready').count() # readyもカウントはするが、表示はしない
     total_orders = Order.query.filter(Order.timestamp >= today_start).count()
     
     stats = {
         'pending_orders': pending_orders,
         'preparing_orders': preparing_orders,
-        'ready_orders': ready_orders,
+        'ready_orders': ready_orders, # frontendで表示しないようにする
         'total_orders': total_orders
     }
     
     return render_template('kitchen.html', stats=stats)
+
 
 @app.route('/dashboard')
 @login_required
@@ -321,9 +323,9 @@ def api_customer_orders():
 @app.route('/api/kitchen/orders')
 @login_required
 def api_kitchen_orders():
-    # 'pending'と'preparing'ステータスの注文をまとめて取得
+    # 表示する注文ステータスをpendingとpreparingに限定
     orders_query = Order.query.filter(
-        and_(Order.status.in_(['pending', 'preparing', 'ready']))
+        and_(Order.status.in_(['pending', 'preparing']))
     ).order_by(Order.timestamp.asc()).all()
     
     # セッションIDごとに注文をグループ化
@@ -343,9 +345,7 @@ def api_kitchen_orders():
             
         # そのセッションの「最も進んだ」ステータスを決定
         current_status = 'pending'
-        if any(o.status == 'ready' for o in orders):
-            current_status = 'ready'
-        elif any(o.status == 'preparing' for o in orders):
+        if any(o.status == 'preparing' for o in orders):
             current_status = 'preparing'
 
         output.append({
@@ -357,18 +357,18 @@ def api_kitchen_orders():
             'items': [{'name': name, 'quantity': qty} for name, qty in item_counts.items()]
         })
 
-    # 表示順序を調整
+    # 表示順序を調整 (pending -> preparing)
     output.sort(key=lambda x: (
         0 if x['status'] == 'pending' else
-        1 if x['status'] == 'preparing' else
-        2 if x['status'] == 'ready' else 3,
+        1 if x['status'] == 'preparing' else 2, # 他のステータスは表示されないが、念のため
         x['created_at']
     ))
 
     # 各ステータスごとの注文数を計算
     pending_orders_count = Order.query.filter_by(status='pending').count()
     preparing_orders_count = Order.query.filter_by(status='preparing').count()
-    ready_orders_count = Order.query.filter_by(status='ready').count()
+    # ready_orders_countは画面表示から除外するため、ここでは直接使用しないが、statsには含める
+    ready_orders_count = Order.query.filter_by(status='ready').count() 
     total_orders_today_count = Order.query.filter(
         Order.timestamp >= datetime.datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)
     ).count()
@@ -376,7 +376,7 @@ def api_kitchen_orders():
     stats = {
         'pending_orders': pending_orders_count,
         'preparing_orders': preparing_orders_count,
-        'ready_orders': ready_orders_count,
+        'ready_orders': ready_orders_count, # 画面では表示しないがデータとしては渡す
         'total_orders': total_orders_today_count
     }
 
@@ -399,7 +399,7 @@ def update_order_status(order_id):
     for order in orders_in_session:
         if new_status == 'preparing' and order.status == 'pending':
             order.status = new_status
-        elif new_status == 'ready' and order.status == 'preparing':
+        elif new_status == 'served' and order.status == 'preparing': # preparing -> served に変更
             order.status = new_status
     
     db.session.commit()
@@ -408,6 +408,8 @@ def update_order_status(order_id):
 @app.route('/api/order/complete/<session_id>', methods=['POST'])
 @login_required
 def api_complete_order(session_id):
+    # このAPIは、セッション単位での完了（Ready->Served）として残しておくが、
+    # 今回の簡素化されたキッチンフローでは直接使用されない。
     orders = Order.query.filter_by(session_id=session_id, status='ready').all()
     if not orders: return jsonify(success=False, message="対象の注文が見つかりません。"), 404
     for order in orders: order.status = 'served'
