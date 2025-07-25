@@ -1,13 +1,12 @@
 import os
 import datetime
 import secrets
-from sqlalchemy import text
 from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, session, abort
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from sqlalchemy import func, desc, and_
+from sqlalchemy import func, desc, and_, text
 import pytz
 from collections import defaultdict
 from math import ceil
@@ -207,6 +206,7 @@ def init_database():
     except Exception as e:
         print(f"データベース初期化エラー: {e}")
         db.session.rollback()
+
 # --- ルートとロジック ---
 @login_manager.user_loader
 def load_user(user_id):
@@ -454,6 +454,11 @@ def submit_order():
         print(f"Debug - Missing session info: table_id={table_id}, persistent_session_id={persistent_session_id}, items={items}")
         return jsonify(success=False, message="セッション情報が無効です。"), 400
     
+    # 注文を処理する前に、テーブルが存在するか確認する
+    table = db.session.get(Table, table_id)
+    if not table:
+        session.clear()
+        return jsonify(success=False, message="このテーブルは現在ご利用いただけません。お手数ですが、再度QRコードを読み取ってください。"), 400
 
     try:
         for item_id, item_data in items.items():
@@ -472,6 +477,7 @@ def submit_order():
         
         table.last_accessed = datetime.datetime.now(JST)
         db.session.commit()
+        print(f"Debug - Order submitted successfully for table {table_id}")
         return jsonify(success=True)
     except Exception as e:
         db.session.rollback()
@@ -564,34 +570,17 @@ def api_generate_guidance_qr():
 @app.route('/api/qr/generate/<int:table_id>', methods=['POST'])
 @login_required
 def api_generate_table_qr(table_id):
-  table = db.session.get(Table, table_id)
-    if not table:
-        session.clear()
-        return jsonify(success=False, message="このテーブルは現在ご利用いただけません。お手数ですが、再度QRコードを読み取ってください。"), 400
-
-    try:
-        for item_id, item_data in items.items():
-            menu_item = db.session.get(MenuItem, int(item_id))
-            if menu_item and item_data.get('quantity', 0) > 0:
-                for _ in range(item_data['quantity']):
-                    order = Order(
-                        item_name=menu_item.name, 
-                        item_price=menu_item.price, 
-                        table_id=table_id, 
-                        persistent_session_id=persistent_session_id,
-                        individual_session_id=individual_session_id
-                    )
-                    db.session.add(order)
-                menu_item.popularity_count += item_data['quantity']
-        
-        table.last_accessed = datetime.datetime.now(JST)
-        db.session.commit()
-        print(f"Debug - Order submitted successfully for table {table_id}")
-        return jsonify(success=True)
-    except Exception as e:
-        db.session.rollback()
-        print(f"注文送信エラー: {e}")
-        return jsonify(success=False, message="注文の処理中にエラーが発生しました。"), 500
+    table = db.session.get(Table, table_id)
+    if not table: return jsonify(success=False, message="Table not found"), 404
+    
+    if not table.active_qr_token:
+        table.active_qr_token = secrets.token_urlsafe(16)
+    
+    if not table.persistent_session_id:
+        table.persistent_session_id = secrets.token_hex(16)
+    
+    db.session.commit()
+    return jsonify(success=True, token=table.active_qr_token)
 
 @app.route('/api/tables', methods=['POST'])
 @login_required
@@ -673,6 +662,37 @@ def api_update_menu_item(item_id):
     except Exception as e:
         db.session.rollback()
         return jsonify(success=False, message=f"メニューの更新中にエラーが発生しました: {str(e)}"), 500
+
+@app.route('/api/menu/<int:item_id>', methods=['DELETE'])
+@login_required
+def api_delete_menu_item(item_id):
+    try:
+        item = db.session.get(MenuItem, item_id)
+        if not item:
+            return jsonify(success=False, message="メニューが見つかりません。"), 404
+        
+        item_name = item.name
+        related_orders = Order.query.filter_by(item_name=item_name).count()
+        
+        if related_orders > 0:
+            item.active = False
+            db.session.commit()
+            return jsonify(
+                success=True, 
+                message=f"メニュー '{item_name}' は注文履歴があるため非表示にしました。完全に削除するには注文履歴を先に削除してください。",
+                action="deactivated"
+            )
+        else:
+            db.session.delete(item)
+            db.session.commit()
+            return jsonify(
+                success=True, 
+                message=f"メニュー '{item_name}' を完全に削除しました。",
+                action="deleted"
+            )
+    except Exception as e:
+        db.session.rollback()
+        return jsonify(success=False, message=f"メニューの削除中にエラーが発生しました: {str(e)}"), 500
 
 @app.route('/api/menu/<int:item_id>/force-delete', methods=['DELETE'])
 @login_required
@@ -858,7 +878,7 @@ def gallery():
 @app.route('/health')
 def health_check():
     try:
-        db.session.execute('SELECT 1')
+        db.session.execute(text('SELECT 1'))
         return jsonify({'status': 'healthy', 'database': 'connected'}), 200
     except Exception as e:
         return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
