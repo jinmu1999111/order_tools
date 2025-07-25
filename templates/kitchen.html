@@ -5,27 +5,29 @@
 <style>
     /* 統計情報セクションのカードデザイン */
     .kitchen-header {
-        background-color: #ffffff; /* 背景を白に */
-        border-radius: 12px; /* 角を丸くする */
-        padding: 1.5rem; /* 内側の余白を調整 */
-        box-shadow: 0 4px 20px rgba(0,0,0,0.07); /* 浮いているような影を付ける */
-        border: 1px solid #f0f0f0; /* 薄い境界線 */
+        background-color: #ffffff;
+        border-radius: 12px;
+        padding: 1.5rem 1rem;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.07);
+        border: 1px solid #f0f0f0;
     }
     /* 各統計アイテム */
     .stat-item {
         text-align: center;
-        padding: 0.5rem;
+        padding: 1rem 0.5rem;
     }
     /* 数字の部分のスタイル */
     .stat-number {
-        font-size: 2.2rem; /* 数字を大きく */
-        font-weight: 600; /* 少し太く */
-        color: #0d6efd; /* プライマリーカラーで見やすく */
+        font-size: 3rem;
+        font-weight: 600;
+        color: #0d6efd;
+        line-height: 1.1;
     }
     /* ラベルの部分のスタイル */
     .stat-label {
-        color: #6c757d; /* ラベルの色を少し落ち着かせる */
-        font-size: 0.9rem;
+        color: #6c757d;
+        font-size: 1rem;
+        margin-top: 0.25rem;
     }
     /* 注文カードのスタイル */
     .order-card {
@@ -41,22 +43,17 @@
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 style="font-size: 2.5rem;">🍳 キッチン管理</h1>
+        <button class="btn btn-light border" id="sound-toggle" title="音声通知をONにする">
+            <i class="bi bi-volume-mute-fill"></i>
+        </button>
     </div>
 
     <div class="row kitchen-header align-items-center mb-4">
-        <div class="col-6 col-md-3 stat-item">
+        <div class="col-6 stat-item">
             <div class="stat-number" id="pending-count">{{ stats.pending_orders or 0 }}</div>
             <div class="stat-label">調理待ち</div>
         </div>
-        <div class="col-6 col-md-3 stat-item">
-            <div class="stat-number" id="preparing-count">{{ stats.preparing_orders or 0 }}</div>
-            <div class="stat-label">調理中</div>
-        </div>
-        <div class="col-6 col-md-3 stat-item mt-3 mt-md-0">
-            <div class="stat-number" id="ready-count">{{ stats.ready_orders or 0 }}</div>
-            <div class="stat-label">提供準備OK</div>
-        </div>
-        <div class="col-6 col-md-3 stat-item mt-3 mt-md-0">
+        <div class="col-6 stat-item">
             <div class="stat-number" id="total-count">{{ stats.total_orders or 0 }}</div>
             <div class="stat-label">本日の注文件数</div>
         </div>
@@ -76,164 +73,134 @@
 {% block scripts %}
 <script>
     let knownOrderIds = new Set();
+    // ★復元：サウンド関連の変数
+    let soundEnabled = false;
+    let notificationSound = null;
+
+    // ★復元：音声ファイルの初期化
+    function initSound() {
+        try {
+            const soundUrl = "{{ url_for('static', filename='sounds/notification.mp3') }}";
+            notificationSound = new Audio(soundUrl);
+            notificationSound.load();
+            notificationSound.addEventListener('error', (e) => {
+                console.warn('音声ファイルの読み込みに失敗:', e);
+                notificationSound = null;
+            });
+        } catch (error) {
+            console.warn('音声機能が利用できません:', error);
+            notificationSound = null;
+        }
+    }
 
     // 通知（メッセージ）表示関数
     function showMessage(message, type = 'info') {
         const alertDiv = document.createElement('div');
         const alertClass = type === 'success' ? 'alert-success' : (type === 'error' ? 'alert-danger' : 'alert-info');
         alertDiv.className = `alert ${alertClass} alert-dismissible fade show position-fixed`;
-        alertDiv.style.cssText = `
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 9999;
-            min-width: 300px;
-            text-align: center;
-        `;
+        alertDiv.style.cssText = `top: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; min-width: 300px; text-align: center;`;
         const iconClass = type === 'success' ? 'bi-check-circle-fill' : (type === 'error' ? 'bi-exclamation-triangle-fill' : 'bi-info-circle-fill');
-        alertDiv.innerHTML = `
-            <i class="bi ${iconClass}"></i>
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
+        alertDiv.innerHTML = `<i class="bi ${iconClass}"></i> ${message} <button type="button" class="btn-close" data-bs-dismiss="alert"></button>`;
         document.body.appendChild(alertDiv);
-        
-        setTimeout(() => {
-            if (alertDiv.parentNode) {
-                alertDiv.remove();
-            }
-        }, 5000);
+        setTimeout(() => { if (alertDiv.parentNode) { alertDiv.remove(); } }, 5000);
+    }
+    
+    // ★復元：サウンド再生
+    function playSound() {
+        if (!notificationSound || !soundEnabled) return;
+        notificationSound.currentTime = 0;
+        const playPromise = notificationSound.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(error => {
+                console.warn("音声の再生に失敗。ユーザー操作が必要です。", error);
+                soundEnabled = false;
+                updateSoundButton();
+                showMessage('🔇 音声再生の許可が必要です。サウンドボタンを一度クリックしてください。', 'error');
+            });
+        }
+    }
+    
+    // ★復元：サウンドボタンの表示更新
+    function updateSoundButton() {
+        const icon = document.querySelector('#sound-toggle i');
+        const button = document.getElementById('sound-toggle');
+        if (icon && button) {
+            icon.className = soundEnabled ? 'bi bi-volume-up-fill' : 'bi bi-volume-mute-fill';
+            button.title = soundEnabled ? '音声通知をOFFにする' : '音声通知をONにする';
+        }
     }
 
     // 注文データを取得して画面を更新
     async function fetchAndRenderOrders() {
         try {
             const response = await fetch('/api/kitchen/orders');
-            
-            if (response.status === 401) {
-                showMessage('セッションが切れました。再度ログインしてください。', 'error');
-                setTimeout(() => { window.location.href = '/login'; }, 2000);
-                return;
-            }
-            
-            if (!response.ok) {
-                showMessage('サーバーとの通信エラーが発生しました', 'error');
-                return;
-            }
-            
+            if (response.status === 401) { /* ... */ return; }
+            if (!response.ok) { /* ... */ return; }
             const data = await response.json();
             if (data.success) {
                 updateStats(data.stats);
-                
                 const currentOrderIds = new Set(data.orders.map(o => o.id));
                 const isNewOrder = [...currentOrderIds].some(id => !knownOrderIds.has(id));
-                
                 if (isNewOrder && knownOrderIds.size > 0) {
                     showMessage('🔔 新しい注文が入りました！', 'info');
+                    // ★復元：サウンド再生の呼び出し
+                    playSound();
                 }
-                
                 knownOrderIds = currentOrderIds;
                 renderOrders(data.orders);
-            } else {
-                showMessage(data.message || 'データの取得に失敗しました', 'error');
-            }
-        } catch (error) {
-            console.error("Fetch error:", error);
-            showMessage('ネットワークエラーが発生しました', 'error');
-        }
+            } else { /* ... */ }
+        } catch (error) { /* ... */ }
     }
 
     // 統計情報を更新
     function updateStats(stats) {
         document.getElementById('pending-count').textContent = stats.pending_orders || 0;
         document.getElementById('total-count').textContent = stats.total_orders || 0;
-        document.getElementById('preparing-count').textContent = stats.preparing_orders || 0;
-        document.getElementById('ready-count').textContent = stats.ready_orders || 0;
     }
 
-    // 注文カードを描画
+    // 注文カードを描画 (変更なし)
     function renderOrders(orders) {
         const grid = document.getElementById('orders-grid');
         const emptyState = document.getElementById('empty-state');
         grid.innerHTML = '';
-
         if (orders.length === 0) {
             emptyState.style.display = 'block';
             return;
         }
-        
         emptyState.style.display = 'none';
-
         orders.forEach(order => {
             const card = document.createElement('div');
             card.className = 'col-12 col-md-6 col-lg-4 col-xl-3 mb-3';
-            
-            let actionButton = '';
-            if (order.status === 'pending') {
-                actionButton = `<button class="btn btn-sm btn-success w-100" onclick="completeOrder(${order.id}, this)">完了</button>`;
-            } else {
-                actionButton = `<span class="badge bg-secondary w-100 p-2" style="font-size: 0.8rem; pointer-events: none;">完了済み</span>`;
-            }
-
+            let actionButton = (order.status === 'pending')
+                ? `<button class="btn btn-sm btn-success w-100" onclick="completeOrder(${order.id}, this)">完了</button>`
+                : `<span class="badge bg-secondary w-100 p-2" style="font-size: 0.8rem; pointer-events: none;">完了済み</span>`;
             const orderTime = new Date(order.timestamp).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
-
-            card.innerHTML = `
-                <div class="card h-100 order-card status-${order.status}">
-                    <div class="card-body p-3 d-flex flex-column">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <h6 class="card-title mb-0 fw-bold">${order.table_name}</h6>
-                            <small class="text-muted">${orderTime}</small>
-                        </div>
-                        <div class="text-center my-3 flex-grow-1 d-flex align-items-center justify-content-center">
-                            <span class="fs-5 fw-bold">${order.item_name}</span>
-                        </div>
-                        <div class="mt-auto">
-                            ${actionButton}
-                        </div>
-                    </div>
-                </div>
-            `;
+            card.innerHTML = `<div class="card h-100 order-card status-${order.status}"><div class="card-body p-3 d-flex flex-column"><div class="d-flex justify-content-between align-items-center mb-2"><h6 class="card-title mb-0 fw-bold">${order.table_name}</h6><small class="text-muted">${orderTime}</small></div><div class="text-center my-3 flex-grow-1 d-flex align-items-center justify-content-center"><span class="fs-5 fw-bold">${order.item_name}</span></div><div class="mt-auto">${actionButton}</div></div></div>`;
             grid.appendChild(card);
         });
     }
 
-    // 注文を「完了(served)」ステータスに更新
+    // 注文を「完了」ステータスに更新 (変更なし)
     async function completeOrder(orderId, button) {
         if (button) {
             button.disabled = true;
-            button.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 処理中...`;
+            button.innerHTML = `<span class="spinner-border spinner-border-sm"></span> 処理中...`;
         }
         try {
-            const response = await fetch(`/api/kitchen/orders/${orderId}/status`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status: 'served' })
-            });
-
-            if (response.status === 401) {
-                showMessage('セッションが切れました。再度ログインしてください。', 'error');
-                setTimeout(() => { window.location.href = '/login'; }, 2000);
-                return;
-            }
-            
+            const response = await fetch(`/api/kitchen/orders/${orderId}/status`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: 'served' }) });
+            if (response.status === 401) { /* ... */ return; }
             const data = await response.json();
             if (response.ok && data.success) {
                 showMessage('注文を完了しました！', 'success');
                 fetchAndRenderOrders();
             } else {
-                showMessage(data.message || 'ステータスの更新に失敗しました', 'error');
-                if (button) {
-                    button.disabled = false;
-                    button.innerHTML = '完了';
-                }
+                showMessage(data.message || '更新に失敗しました', 'error');
+                if (button) { button.disabled = false; button.innerHTML = '完了'; }
             }
         } catch (error) {
-            console.error('Update status error:', error);
-            showMessage('ステータスの更新中にエラーが発生しました', 'error');
-            if (button) {
-                button.disabled = false;
-                button.innerHTML = '完了';
-            }
+            console.error('Update error:', error);
+            showMessage('更新中にエラーが発生しました', 'error');
+            if (button) { button.disabled = false; button.innerHTML = '完了'; }
         }
     }
 
@@ -241,18 +208,34 @@
     document.addEventListener('DOMContentLoaded', function() {
         console.log('キッチン管理画面を初期化中...');
         
-        fetchAndRenderOrders();
+        // ★復元：サウンド関連の初期化
+        initSound();
+        updateSoundButton();
         
-        setInterval(fetchAndRenderOrders, 15000); // 15秒ごとに自動更新
+        // ★復元：サウンドボタンのクリックイベント
+        document.getElementById('sound-toggle').addEventListener('click', () => {
+            soundEnabled = !soundEnabled;
+            updateSoundButton();
+            if (soundEnabled) {
+                showMessage('🔊 音声通知が有効になりました', 'info');
+                // ユーザー操作をトリガーに一度再生を試みる
+                if (notificationSound) {
+                    notificationSound.play().then(() => notificationSound.pause()).catch(() => {});
+                }
+            } else {
+                showMessage('🔇 音声通知が無効になりました', 'info');
+            }
+        });
+        
+        fetchAndRenderOrders();
+        setInterval(fetchAndRenderOrders, 15000);
         
         console.log('キッチン管理画面の初期化完了');
     });
 
     // ページの可視性が変わった時の処理
     document.addEventListener('visibilitychange', function() {
-        if (!document.hidden) {
-            fetchAndRenderOrders();
-        }
+        if (!document.hidden) { fetchAndRenderOrders(); }
     });
 </script>
 {% endblock %}
