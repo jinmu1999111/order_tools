@@ -108,7 +108,7 @@
         <div class="container-fluid">
             <div class="navbar-brand-container">
                 {% set home_url = url_for('index') %}
-                {% if session.get('table_id') %}
+                {% if session.get('table_id') and session.get('is_customer') %}
                     {% set home_url = url_for('table_menu', table_id=session.get('table_id')) %}
                 {% elif current_user.is_authenticated %}
                     {% set home_url = url_for('dashboard') %}
@@ -123,7 +123,7 @@
 
             <div class="collapse navbar-collapse" id="navbarContent">
                 <ul class="navbar-nav ms-auto">
-                    {% if current_user.is_authenticated and not session.get('table_id') %}
+                    {% if current_user.is_authenticated and not session.get('is_customer') %}
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('kitchen') }}">キッチン</a></li>
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard') }}">ダッシュボード</a></li>
                         <li class="nav-item dropdown">
@@ -136,7 +136,9 @@
                             </ul>
                         </li>
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('logout') }}">ログアウト</a></li>
-                    {% elif not current_user.is_authenticated and not session.get('table_id') %}
+                    {% elif session.get('is_customer') %}
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('clear_session') }}">セッション終了</a></li>
+                    {% elif not current_user.is_authenticated and not session.get('is_customer') %}
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('login') }}">管理者ログイン</a></li>
                     {% endif %}
                 </ul>

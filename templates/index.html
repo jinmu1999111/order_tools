@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-{% block title %}ホーム - 注文管理システム{% endblock %}
+{% block title %}ホーム - Moi 注文管理システム{% endblock %}
 {% block content %}
 <style>
     .hero-section {
@@ -7,6 +7,7 @@
         color: white;
         padding: 5rem 0;
         text-align: center;
+        margin: -1.5rem -1.5rem 3rem -1.5rem;
     }
     .feature-card {
         background: white;
@@ -20,31 +21,99 @@
     .feature-card:hover {
         transform: translateY(-5px);
     }
+    .admin-login-section {
+        background-color: #f8f9fa;
+        border-radius: 15px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        text-align: center;
+        border: 2px solid var(--color-primary);
+    }
+    .qr-info {
+        background-color: #e3f2fd;
+        border-radius: 15px;
+        padding: 2rem;
+        text-align: center;
+    }
 </style>
+
 <div class="hero-section">
     <div class="container">
-        <h1 class="display-4">注文管理システム</h1>
-        <p class="lead">効率的な注文管理とスムーズなオペレーションを実現します。</p>
-        <p>QRコードをスキャンして注文を開始するか、管理者としてログインしてください。</p>
+        <h1 class="display-4 mb-4">🍽️ Moi 注文管理システム</h1>
+        <p class="lead mb-4">効率的な注文管理とスムーズなオペレーションを実現します</p>
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <p class="fs-5">お客様はQRコードをスキャンしてご注文、スタッフの方は管理者ログインから各種管理機能をご利用ください。</p>
+            </div>
+        </div>
     </div>
 </div>
 
-<div class="container mt-5">
-    <div class="row justify-content-center">
-        <div class="col-lg-4 col-md-6 mb-4">
-            <div class="feature-card">
-                <h3><i class="fas fa-fire"></i> キッチン管理</h3>
-                <p>リアルタイムで注文状況を確認し、調理管理を行います。</p>
-                <a href="{{ url_for('kitchen') }}" class="btn btn-primary">キッチン画面へ</a>
-            </div>
-        </div>
-        <div class="col-lg-4 col-md-6 mb-4">
-            <div class="feature-card">
-                <h3><i class="fas fa-chart-line"></i> 売上分析</h3>
-                <p>詳細な売上データと分析レポートで経営判断をサポートします。</p>
-                <a href="{{ url_for('dashboard') }}" class="btn btn-primary">ダッシュボードへ</a>
+<div class="container">
+    <!-- 管理者ログインセクション -->
+    <div class="admin-login-section">
+        <h2 class="mb-3">👨‍💼 スタッフ・管理者の方</h2>
+        <p class="mb-4">システム管理、キッチン管理、売上分析などの機能をご利用いただけます。</p>
+        <a href="{{ url_for('login') }}" class="btn btn-primary btn-lg px-5">
+            <i class="bi bi-box-arrow-in-right"></i> 管理者ログイン
+        </a>
+    </div>
+
+    <!-- お客様向け情報 -->
+    <div class="qr-info">
+        <h2 class="mb-3">📱 お客様</h2>
+        <p class="mb-4">テーブルに設置されているQRコードをスキャンしてご注文ください。</p>
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="d-flex align-items-center justify-content-center">
+                    <i class="bi bi-qr-code" style="font-size: 4rem; margin-right: 1rem; opacity: 0.7;"></i>
+                    <div class="text-start">
+                        <h5>QRコードで簡単注文</h5>
+                        <p class="mb-0 text-muted">テーブルのQRコードをスマートフォンで読み取ってください</p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
+
+    <!-- 機能紹介（管理者向け） -->
+    <div class="row mt-5">
+        <div class="col-12 text-center mb-4">
+            <h2>✨ 主な機能</h2>
+            <p class="text-muted">効率的なレストラン運営をサポートする豊富な機能</p>
+        </div>
+        
+        <div class="col-lg-4 col-md-6 mb-4">
+            <div class="feature-card">
+                <i class="bi bi-fire" style="font-size: 3rem; color: var(--color-primary); margin-bottom: 1rem;"></i>
+                <h4>キッチン管理</h4>
+                <p>リアルタイムで注文状況を確認し、効率的な調理管理を行えます。</p>
+            </div>
+        </div>
+        
+        <div class="col-lg-4 col-md-6 mb-4">
+            <div class="feature-card">
+                <i class="bi bi-graph-up" style="font-size: 3rem; color: var(--color-primary); margin-bottom: 1rem;"></i>
+                <h4>売上分析</h4>
+                <p>詳細な売上データと分析レポートで経営判断をサポートします。</p>
+            </div>
+        </div>
+        
+        <div class="col-lg-4 col-md-6 mb-4">
+            <div class="feature-card">
+                <i class="bi bi-qr-code-scan" style="font-size: 3rem; color: var(--color-primary); margin-bottom: 1rem;"></i>
+                <h4>QRコード注文</h4>
+                <p>お客様はQRコードをスキャンするだけで簡単に注文できます。</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- フッター情報 -->
+    <div class="text-center mt-5 pt-4 border-top">
+        <p class="text-muted">
+            <small>💡 ご質問やサポートが必要な場合は、システム管理者にお問い合わせください。</small>
+        </p>
+    </div>
 </div>
+
 {% endblock %}

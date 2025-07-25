@@ -169,30 +169,52 @@ def init_database():
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+# ルーティング部分の修正
 @app.route('/')
 def index():
+    # セッション情報をクリアして、明確にホーム画面を表示
+    if 'table_id' in session:
+        # 顧客セッションが残っている場合はクリア
+        session.clear()
+    
+    # 管理者がログイン済みの場合はダッシュボードにリダイレクト
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+    
+    # それ以外はホーム画面を表示
     return render_template('index.html')
+
+@app.route('/clear-session')
+def clear_session():
+    """セッションクリア用エンドポイント（デバッグ用）"""
+    session.clear()
+    flash('セッションをクリアしました。', 'success')
+    return redirect(url_for('index'))
 
 @app.route('/qr/<token>')
 def qr_auth(token):
+    # 管理者がログイン中の場合はそのままQRコード処理を続行
+    # それ以外の場合は顧客セッションとして処理
+    
     # 一時QRトークンの処理
     temp_token = TempQRToken.query.filter_by(token=token).first()
     if temp_token and temp_token.is_valid():
         table = Table.query.filter_by(name=temp_token.table_name).first()
         if not table:
             table = Table(name=temp_token.table_name)
-            # 新しいテーブルには新しい永続セッションIDを付与
             table.persistent_session_id = secrets.token_hex(16)
             db.session.add(table)
             db.session.flush()
         
-        # テーブルの永続セッションIDを使用
         if not table.persistent_session_id:
             table.persistent_session_id = secrets.token_hex(16)
         
+        # 顧客セッション情報を設定
+        session.clear()  # 既存のセッションをクリア
         session['table_id'] = table.id
         session['persistent_session_id'] = table.persistent_session_id
-        session['individual_session_id'] = secrets.token_hex(8)  # 短めの個別ID
+        session['individual_session_id'] = secrets.token_hex(8)
+        session['is_customer'] = True  # 顧客セッションフラグ
         
         table.status = 'occupied'
         table.last_accessed = datetime.datetime.now(JST)
@@ -201,16 +223,18 @@ def qr_auth(token):
         
         return redirect(url_for('table_menu', table_id=table.id))
     
-    # 通常のテーブルQRトークンの処理
+  # 通常のテーブルQRトークンの処理
     table = Table.query.filter_by(active_qr_token=token).first()
     if table:
-        # 既存の永続セッションIDを使用（なければ新規作成）
         if not table.persistent_session_id:
             table.persistent_session_id = secrets.token_hex(16)
         
+        # 顧客セッション情報を設定
+        session.clear()  # 既存のセッションをクリア
         session['table_id'] = table.id
         session['persistent_session_id'] = table.persistent_session_id
         session['individual_session_id'] = secrets.token_hex(8)
+        session['is_customer'] = True  # 顧客セッションフラグ
         
         table.status = 'occupied'
         table.last_accessed = datetime.datetime.now(JST)
@@ -221,37 +245,21 @@ def qr_auth(token):
     flash('QRコードが無効か期限切れです。', 'danger')
     return redirect(url_for('index'))
 
-def get_menu_data(sort_by='category'):
-    if sort_by == 'popularity':
-        items = MenuItem.query.filter_by(active=True).order_by(MenuItem.popularity_count.desc()).all()
-        return {'item_list': items}
-    else:
-        sorted_categories = Category.query.order_by(Category.sort_order).all()
-        categorized_menu = []
-        for category in sorted_categories:
-            items = MenuItem.query.filter_by(active=True, category_id=category.id).order_by(MenuItem.sort_order).all()
-            if items:
-                categorized_menu.append({'category_name': category.name, 'item_list': items})
-        return {'categorized_menu': categorized_menu}
-
 @app.route('/table/<int:table_id>')
 def table_menu(table_id):
-    if not session.get('table_id') == table_id and not current_user.is_authenticated:
-        abort(403)
+    # 顧客セッションまたは管理者のみアクセス可能
+    if not (session.get('table_id') == table_id and session.get('is_customer')) and not current_user.is_authenticated:
+        # 無効なアクセスの場合はセッションをクリアしてホームに戻す
+        session.clear()
+        flash('無効なアクセスです。QRコードから再度アクセスしてください。', 'warning')
+        return redirect(url_for('index'))
+    
     table = db.session.get(Table, table_id)
-    if not table: abort(404)
+    if not table: 
+        abort(404)
+    
     menu_data = get_menu_data()
     return render_template('table_menu.html', table=table, **menu_data)
-
-@app.route('/table/<int:table_id>/menu_partial')
-def table_menu_partial(table_id):
-    sort_by = request.args.get('sort_by', 'category')
-    menu_data = get_menu_data(sort_by)
-    if sort_by == 'popularity':
-        return render_template('_menu_popular.html', items=menu_data['item_list'])
-    else:
-        return render_template('_menu_category.html', categorized_menu=menu_data['categorized_menu'])
-
 # --- 管理者ページ ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
