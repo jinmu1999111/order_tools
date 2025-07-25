@@ -7,7 +7,7 @@
                  data-item-id="{{ item.id }}" 
                  data-item-name="{{ item.name }}" 
                  data-item-price="{{ item.price }}"
-                 data-item-description="{{ item.description or '' }}">
+                 data-item-description="{{ item.description if item.description else '' }}">
                 <h4 class="item-name">{{ item.name }}</h4>
                 {% if item.description %}
                     <p class="item-description">{{ item.description }}</p>
