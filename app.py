@@ -208,7 +208,7 @@ def init_database():
                 if not check_column_exists('menu_item', 'description'):
                     print("Adding description column to menu_item table...")
                     if is_postgresql:
-                        # PostgreSQL用のALTER TABLE
+                        # PostgreSQL用のALTER TABLE（IF NOT EXISTSは使わない）
                         db.session.execute(text('ALTER TABLE menu_item ADD COLUMN description TEXT'))
                     else:
                         # SQLite用のALTER TABLE
@@ -222,16 +222,12 @@ def init_database():
                 print(f"Column addition error: {e}")
                 db.session.rollback()
                 
-                # 強制的にテーブルを再作成する場合（最後の手段）
-                print("Attempting to recreate tables...")
-                try:
-                    db.drop_all()
-                    db.create_all()
-                    db.session.commit()
-                    print("Tables recreated successfully.")
-                except Exception as recreate_error:
-                    print(f"Table recreation failed: {recreate_error}")
-                    db.session.rollback()
+                # PostgreSQLの場合、カラムが既に存在するエラーは無視
+                if 'already exists' in str(e) or 'duplicate column' in str(e):
+                    print("Description column already exists (ignored error)")
+                else:
+                    print("Attempting to continue without description column...")
+                    # descriptionカラムなしで続行
             
             # 管理者アカウントの作成
             try:
@@ -394,17 +390,58 @@ def qr_auth(token):
         return redirect(url_for('index'))
 
 def get_menu_data(sort_by='category'):
-    if sort_by == 'popularity':
-        items = MenuItem.query.filter_by(active=True).order_by(MenuItem.popularity_count.desc()).all()
-        return {'item_list': items}
-    else:
-        sorted_categories = Category.query.order_by(Category.sort_order).all()
-        categorized_menu = []
-        for category in sorted_categories:
-            items = MenuItem.query.filter_by(active=True, category_id=category.id).order_by(MenuItem.sort_order).all()
-            if items:
-                categorized_menu.append({'category_name': category.name, 'item_list': items})
-        return {'categorized_menu': categorized_menu}
+    """メニューデータを安全に取得する関数"""
+    try:
+        has_description = check_column_exists('menu_item', 'description')
+        
+        if sort_by == 'popularity':
+            if has_description:
+                items = MenuItem.query.filter_by(active=True).order_by(MenuItem.popularity_count.desc()).all()
+            else:
+                # descriptionカラムなしでクエリ
+                items_raw = db.session.query(
+                    MenuItem.id, MenuItem.name, MenuItem.price, MenuItem.active, 
+                    MenuItem.popularity_count, MenuItem.sort_order, MenuItem.category_id
+                ).filter_by(active=True).order_by(MenuItem.popularity_count.desc()).all()
+                
+                items = []
+                for item in items_raw:
+                    mock_item = type('MenuItem', (), {
+                        'id': item.id, 'name': item.name, 'price': item.price,
+                        'active': item.active, 'popularity_count': item.popularity_count,
+                        'sort_order': item.sort_order, 'category_id': item.category_id,
+                        'description': ''
+                    })()
+                    items.append(mock_item)
+            return {'item_list': items}
+        else:
+            sorted_categories = Category.query.order_by(Category.sort_order).all()
+            categorized_menu = []
+            for category in sorted_categories:
+                if has_description:
+                    items = MenuItem.query.filter_by(active=True, category_id=category.id).order_by(MenuItem.sort_order).all()
+                else:
+                    items_raw = db.session.query(
+                        MenuItem.id, MenuItem.name, MenuItem.price, MenuItem.active,
+                        MenuItem.popularity_count, MenuItem.sort_order, MenuItem.category_id
+                    ).filter_by(active=True, category_id=category.id).order_by(MenuItem.sort_order).all()
+                    
+                    items = []
+                    for item in items_raw:
+                        mock_item = type('MenuItem', (), {
+                            'id': item.id, 'name': item.name, 'price': item.price,
+                            'active': item.active, 'popularity_count': item.popularity_count,
+                            'sort_order': item.sort_order, 'category_id': item.category_id,
+                            'description': ''
+                        })()
+                        items.append(mock_item)
+                
+                if items:
+                    categorized_menu.append({'category_name': category.name, 'item_list': items})
+            return {'categorized_menu': categorized_menu}
+    except Exception as e:
+        print(f"Error in get_menu_data: {e}")
+        return {'categorized_menu': []} if sort_by != 'popularity' else {'item_list': []}
 
 @app.route('/table/<int:table_id>')
 def table_menu(table_id):
@@ -503,9 +540,9 @@ def dashboard():
 def admin_menu():
     try:
         print("=== Admin Menu Debug ===")
+        print(f"Database type: {'PostgreSQL' if 'postgresql' in app.config['SQLALCHEMY_DATABASE_URI'] else 'SQLite'}")
         
         # カテゴリを取得
-        print("Fetching categories...")
         sorted_categories = Category.query.order_by(Category.sort_order).all()
         print(f"Found {len(sorted_categories)} categories")
         
@@ -513,16 +550,45 @@ def admin_menu():
         for category in sorted_categories:
             print(f"Processing category: {category.name} (ID: {category.id})")
             
-            # メニューアイテムを取得
-            items = MenuItem.query.filter_by(category_id=category.id).order_by(MenuItem.sort_order).all()
-            print(f"Found {len(items)} items in category {category.name}")
+            # descriptionカラムの存在を確認してからクエリを実行
+            has_description = check_column_exists('menu_item', 'description')
+            print(f"Description column exists: {has_description}")
             
-            # アイテムを直接使用（変換不要）
+            if has_description:
+                # descriptionカラムが存在する場合
+                items = MenuItem.query.filter_by(category_id=category.id).order_by(MenuItem.sort_order).all()
+            else:
+                # descriptionカラムが存在しない場合、明示的に除外してクエリ
+                items = db.session.query(
+                    MenuItem.id,
+                    MenuItem.name,
+                    MenuItem.price,
+                    MenuItem.active,
+                    MenuItem.popularity_count,
+                    MenuItem.sort_order,
+                    MenuItem.category_id
+                ).filter_by(category_id=category.id).order_by(MenuItem.sort_order).all()
+                
+                # 結果をMenuItemオブジェクトのような形に変換
+                converted_items = []
+                for item in items:
+                    mock_item = type('MenuItem', (), {
+                        'id': item.id,
+                        'name': item.name,
+                        'price': item.price,
+                        'active': item.active,
+                        'popularity_count': item.popularity_count,
+                        'sort_order': item.sort_order,
+                        'category_id': item.category_id,
+                        'description': ''  # 空の説明
+                    })()
+                    converted_items.append(mock_item)
+                items = converted_items
+            
+            print(f"Found {len(items)} items in category {category.name}")
             categorized_items.append({'category_obj': category, 'item_list': items})
         
         print(f"Total categorized groups: {len(categorized_items)}")
-        print("Rendering template...")
-        
         return render_template('admin_menu.html', categorized_items=categorized_items)
         
     except Exception as e:
@@ -1030,7 +1096,44 @@ def health_check():
     except Exception as e:
         return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
 
-# テスト用ルート（デバッグ用）
+# PostgreSQL用カラム追加エンドポイント
+@app.route('/add-description-column')
+@login_required
+def add_description_column():
+    """PostgreSQLにdescriptionカラムを手動で追加する"""
+    try:
+        with app.app_context():
+            is_postgresql = 'postgresql' in app.config['SQLALCHEMY_DATABASE_URI']
+            
+            if not is_postgresql:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'This endpoint is only for PostgreSQL databases'
+                }), 400
+            
+            # カラムが既に存在するかチェック
+            if check_column_exists('menu_item', 'description'):
+                return jsonify({
+                    'status': 'success',
+                    'message': 'Description column already exists'
+                })
+            
+            # descriptionカラムを追加
+            print("Adding description column to PostgreSQL...")
+            db.session.execute(text('ALTER TABLE menu_item ADD COLUMN description TEXT'))
+            db.session.commit()
+            
+            return jsonify({
+                'status': 'success',
+                'message': 'Description column added successfully to PostgreSQL'
+            })
+            
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'status': 'error',
+            'message': f'Failed to add description column: {str(e)}'
+        }), 500
 @app.route('/test-menu-data')
 @login_required
 def test_menu_data():
