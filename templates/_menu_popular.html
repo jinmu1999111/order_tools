@@ -3,7 +3,28 @@
     <div class="row justify-content-center">
         {% for item in items %}
         <div class="col-md-6 col-lg-4">
-            {% include '_menu_item.html' %}
+            <div class="menu-item" 
+                 data-item-id="{{ item.id }}" 
+                 data-item-name="{{ item.name }}" 
+                 data-item-price="{{ item.price }}"
+                 data-item-description="{{ item.description or '' }}">
+                <h4 class="item-name">{{ item.name }}</h4>
+                {% if item.description %}
+                    <p class="item-description">{{ item.description }}</p>
+                {% endif %}
+                <p class="item-price">¥{{ "{:,}".format(item.price) }}</p>
+                <div class="popularity-rank">
+                    <span class="badge bg-warning">{{ loop.index }}位 ({{ item.popularity_count }}回注文)</span>
+                </div>
+                <div class="d-flex justify-content-center align-items-center gap-3">
+                    <div class="input-group" style="width: 150px;">
+                        <button class="btn btn-outline-secondary qty-btn" type="button" onclick="changeQuantity('{{ item.id }}', -1)">-</button>
+                        <span class="form-control text-center fs-5" id="qty-{{ item.id }}">0</span>
+                        <button class="btn btn-outline-secondary qty-btn" type="button" onclick="changeQuantity('{{ item.id }}', 1)">+</button>
+                    </div>
+                    <button class="btn btn-primary add-to-cart-btn" onclick="addToCart('{{ item.id }}')">カートへ</button>
+                </div>
+            </div>
         </div>
         {% endfor %}
     </div>

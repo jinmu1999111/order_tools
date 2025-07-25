@@ -1,6 +1,7 @@
 import os
 import datetime
 import secrets
+from sqlalchemy import text
 from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, jsonify, flash, session, abort
 from flask_sqlalchemy import SQLAlchemy
@@ -87,6 +88,7 @@ class MenuItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     price = db.Column(db.Integer, nullable=False)
+    description = db.Column(db.Text, nullable=True)  # 商品説明
     active = db.Column(db.Boolean, default=True)
     popularity_count = db.Column(db.Integer, default=0)
     sort_order = db.Column(db.Integer, default=0, nullable=False)
@@ -134,6 +136,20 @@ def init_database():
         with app.app_context():
             db.create_all()
             
+            # 既存テーブルに新しいカラムを追加（マイグレーション用）
+            try:
+                db.session.execute(text('SELECT description FROM menu_item LIMIT 1'))
+            except Exception:
+                # description カラムが存在しない場合は追加
+                print("Adding new column to menu_item table...")
+                try:
+                    db.session.execute(text('ALTER TABLE menu_item ADD COLUMN description TEXT'))
+                    db.session.commit()
+                    print("New column added to menu_item table.")
+                except Exception as e:
+                    print(f"Column addition error (may already exist): {e}")
+                    db.session.rollback()
+            
             # 管理者アカウントの作成
             if not User.query.filter_by(username='admin').first():
                 admin_user = User(username='admin')
@@ -158,11 +174,39 @@ def init_database():
                     table.active_qr_token = secrets.token_urlsafe(16)
                 print(f"テーブル '{table.name}' に永続セッションIDを追加しました。")
             
+            # サンプルメニューデータの追加（開発用）
+            if MenuItem.query.count() == 0:
+                print("サンプルメニューを作成中...")
+                # サンプルカテゴリとメニューを作成
+                appetizer_cat = Category(name='前菜', sort_order=0)
+                main_cat = Category(name='メイン', sort_order=1)
+                dessert_cat = Category(name='デザート', sort_order=2)
+                drink_cat = Category(name='ドリンク', sort_order=3)
+                
+                db.session.add_all([appetizer_cat, main_cat, dessert_cat, drink_cat])
+                db.session.flush()
+                
+                sample_items = [
+                    MenuItem(name='シーザーサラダ', price=800, description='新鮮なロメインレタスとパルメザンチーズの定番サラダ', category_id=appetizer_cat.id, sort_order=0),
+                    MenuItem(name='エビとアボカドのカクテル', price=1200, description='プリプリのエビと濃厚アボカドの前菜', category_id=appetizer_cat.id, sort_order=1),
+                    MenuItem(name='グリルチキン', price=1800, description='ジューシーなグリルチキンとハーブソース', category_id=main_cat.id, sort_order=0),
+                    MenuItem(name='ビーフステーキ', price=2800, description='柔らかな牛肉のステーキ、お好みの焼き加減で', category_id=main_cat.id, sort_order=1),
+                    MenuItem(name='パスタ ボロネーゼ', price=1600, description='濃厚なミートソースのパスタ', category_id=main_cat.id, sort_order=2),
+                    MenuItem(name='ティラミス', price=600, description='イタリア伝統のマスカルポーネデザート', category_id=dessert_cat.id, sort_order=0),
+                    MenuItem(name='チョコレートケーキ', price=700, description='濃厚なチョコレートケーキ', category_id=dessert_cat.id, sort_order=1),
+                    MenuItem(name='コーヒー', price=400, description='深煎りのブレンドコーヒー', category_id=drink_cat.id, sort_order=0),
+                    MenuItem(name='紅茶', price=400, description='芳醇な香りの紅茶', category_id=drink_cat.id, sort_order=1),
+                    MenuItem(name='オレンジジュース', price=500, description='新鮮なオレンジの100%ジュース', category_id=drink_cat.id, sort_order=2),
+                ]
+                
+                db.session.add_all(sample_items)
+                print("サンプルメニューを作成しました。")
+            
             db.session.commit()
             print("データベースの初期化・更新が完了しました。")
     except Exception as e:
         print(f"データベース初期化エラー: {e}")
-
+        db.session.rollback()
 # --- ルートとロジック ---
 @login_manager.user_loader
 def load_user(user_id):
@@ -404,14 +448,12 @@ def submit_order():
     individual_session_id = session.get('individual_session_id')
     items = data.get('items')
     
+    print(f"Debug - session table_id: {table_id}, items: {items}")  # デバッグ用
+    
     if not all([table_id, persistent_session_id, items]): 
+        print(f"Debug - Missing session info: table_id={table_id}, persistent_session_id={persistent_session_id}, items={items}")
         return jsonify(success=False, message="セッション情報が無効です。"), 400
     
-    # 注文を処理する前に、テーブルが存在するか確認する
-    table = db.session.get(Table, table_id)
-    if not table:
-        session.clear()
-        return jsonify(success=False, message="このテーブルは現在ご利用いただけません。お手数ですが、再度QRコードを読み取ってください。"), 400
 
     try:
         for item_id, item_data in items.items():
@@ -522,17 +564,34 @@ def api_generate_guidance_qr():
 @app.route('/api/qr/generate/<int:table_id>', methods=['POST'])
 @login_required
 def api_generate_table_qr(table_id):
-    table = db.session.get(Table, table_id)
-    if not table: return jsonify(success=False, message="Table not found"), 404
-    
-    if not table.active_qr_token:
-        table.active_qr_token = secrets.token_urlsafe(16)
-    
-    if not table.persistent_session_id:
-        table.persistent_session_id = secrets.token_hex(16)
-    
-    db.session.commit()
-    return jsonify(success=True, token=table.active_qr_token)
+  table = db.session.get(Table, table_id)
+    if not table:
+        session.clear()
+        return jsonify(success=False, message="このテーブルは現在ご利用いただけません。お手数ですが、再度QRコードを読み取ってください。"), 400
+
+    try:
+        for item_id, item_data in items.items():
+            menu_item = db.session.get(MenuItem, int(item_id))
+            if menu_item and item_data.get('quantity', 0) > 0:
+                for _ in range(item_data['quantity']):
+                    order = Order(
+                        item_name=menu_item.name, 
+                        item_price=menu_item.price, 
+                        table_id=table_id, 
+                        persistent_session_id=persistent_session_id,
+                        individual_session_id=individual_session_id
+                    )
+                    db.session.add(order)
+                menu_item.popularity_count += item_data['quantity']
+        
+        table.last_accessed = datetime.datetime.now(JST)
+        db.session.commit()
+        print(f"Debug - Order submitted successfully for table {table_id}")
+        return jsonify(success=True)
+    except Exception as e:
+        db.session.rollback()
+        print(f"注文送信エラー: {e}")
+        return jsonify(success=False, message="注文の処理中にエラーが発生しました。"), 500
 
 @app.route('/api/tables', methods=['POST'])
 @login_required
@@ -563,6 +622,7 @@ def api_add_menu_item():
     data = request.json
     if not all(k in data for k in ['name', 'price', 'category']):
         return jsonify(success=False, message='Missing data'), 400
+    
     category_name = data['category']
     category = Category.query.filter_by(name=category_name).first()
     if not category:
@@ -571,43 +631,48 @@ def api_add_menu_item():
         category = Category(name=category_name, sort_order=new_cat_order)
         db.session.add(category)
         db.session.flush()
+    
     max_item_order = db.session.query(func.max(MenuItem.sort_order)).filter_by(category_id=category.id).scalar()
     new_item_order = (max_item_order + 1) if max_item_order is not None else 0
-    item = MenuItem(name=data['name'], price=int(data['price']), category_id=category.id, sort_order=new_item_order)
+    
+    item = MenuItem(
+        name=data['name'], 
+        price=int(data['price']), 
+        description=data.get('description', ''),
+        category_id=category.id, 
+        sort_order=new_item_order
+    )
     db.session.add(item)
     db.session.commit()
-    return jsonify(success=True, item_id=item.id, name=item.name, price=item.price, category=category.name, active=item.active)
+    
+    return jsonify(
+        success=True, 
+        item_id=item.id, 
+        name=item.name, 
+        price=item.price, 
+        category=category.name, 
+        active=item.active,
+        description=item.description
+    )
 
-@app.route('/api/menu/<int:item_id>', methods=['DELETE'])
+@app.route('/api/menu/<int:item_id>/update', methods=['PUT'])
 @login_required
-def api_delete_menu_item(item_id):
+def api_update_menu_item(item_id):
     try:
         item = db.session.get(MenuItem, item_id)
         if not item:
             return jsonify(success=False, message="メニューが見つかりません。"), 404
         
-        item_name = item.name
-        related_orders = Order.query.filter_by(item_name=item_name).count()
+        data = request.json
+        item.name = data.get('name', item.name)
+        item.price = data.get('price', item.price)
+        item.description = data.get('description', item.description)
         
-        if related_orders > 0:
-            item.active = False
-            db.session.commit()
-            return jsonify(
-                success=True, 
-                message=f"メニュー '{item_name}' は注文履歴があるため非表示にしました。完全に削除するには注文履歴を先に削除してください。",
-                action="deactivated"
-            )
-        else:
-            db.session.delete(item)
-            db.session.commit()
-            return jsonify(
-                success=True, 
-                message=f"メニュー '{item_name}' を完全に削除しました。",
-                action="deleted"
-            )
+        db.session.commit()
+        return jsonify(success=True, message="メニューを更新しました。")
     except Exception as e:
         db.session.rollback()
-        return jsonify(success=False, message=f"メニューの削除中にエラーが発生しました: {str(e)}"), 500
+        return jsonify(success=False, message=f"メニューの更新中にエラーが発生しました: {str(e)}"), 500
 
 @app.route('/api/menu/<int:item_id>/force-delete', methods=['DELETE'])
 @login_required
