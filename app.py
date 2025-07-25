@@ -936,19 +936,59 @@ def api_add_menu_item():
         max_item_order = db.session.query(func.max(MenuItem.sort_order)).filter_by(category_id=category.id).scalar()
         new_item_order = (max_item_order + 1) if max_item_order is not None else 0
         
+        # descriptionカラムの存在を確認
+        has_description = check_column_exists('menu_item', 'description')
+        print(f"Has description column: {has_description}")
+        
         # MenuItemを安全に作成
-        item_data = {
-            'name': data['name'],
-            'price': int(data['price']),
-            'category_id': category.id,
-            'sort_order': new_item_order
-        }
+        if has_description:
+            # descriptionカラムが存在する場合
+            item = MenuItem(
+                name=data['name'],
+                price=int(data['price']),
+                description=data.get('description', ''),
+                category_id=category.id,
+                sort_order=new_item_order
+            )
+        else:
+            # descriptionカラムが存在しない場合、直接SQLでINSERT
+            print("Using direct SQL insert (no description column)")
+            db.session.execute(text('''
+                INSERT INTO menu_item (name, price, active, popularity_count, sort_order, category_id)
+                VALUES (:name, :price, :active, :popularity_count, :sort_order, :category_id)
+            '''), {
+                'name': data['name'],
+                'price': int(data['price']),
+                'active': True,
+                'popularity_count': 0,
+                'sort_order': new_item_order,
+                'category_id': category.id
+            })
+            
+            db.session.commit()
+            
+            # 追加されたアイテムのIDを取得
+            result = db.session.execute(text('''
+                SELECT id FROM menu_item 
+                WHERE name = :name AND category_id = :category_id 
+                ORDER BY id DESC LIMIT 1
+            '''), {
+                'name': data['name'],
+                'category_id': category.id
+            })
+            item_id = result.scalar()
+            
+            return jsonify(
+                success=True,
+                item_id=item_id,
+                name=data['name'],
+                price=int(data['price']),
+                category=category.name,
+                active=True,
+                description=''  # 空の説明
+            )
         
-        # descriptionフィールドが存在する場合のみ追加
-        if check_column_exists('menu_item', 'description'):
-            item_data['description'] = data.get('description', '')
-        
-        item = MenuItem(**item_data)
+        # 通常のORM処理
         db.session.add(item)
         db.session.commit()
         
@@ -964,33 +1004,51 @@ def api_add_menu_item():
     except Exception as e:
         db.session.rollback()
         print(f"Menu add error: {e}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
         return jsonify(success=False, message=f'メニュー追加中にエラーが発生しました: {str(e)}'), 500
 
 @app.route('/api/menu/<int:item_id>/update', methods=['PUT'])
 @login_required
 def api_update_menu_item(item_id):
     try:
-        item = db.session.get(MenuItem, item_id)
-        if not item:
-            return jsonify(success=False, message="メニューが見つかりません。"), 404
-        
+        has_description = check_column_exists('menu_item', 'description')
         data = request.json
-        item.name = data.get('name', item.name)
-        item.price = data.get('price', item.price)
         
-        # descriptionフィールドが存在するかチェック
-        try:
-            if hasattr(item, 'description'):
-                item.description = data.get('description', getattr(item, 'description', ''))
-        except Exception as desc_error:
-            print(f"Description field error: {desc_error}")
-            # descriptionフィールドのエラーは無視して続行
+        if has_description:
+            # descriptionカラムが存在する場合
+            item = db.session.get(MenuItem, item_id)
+            if not item:
+                return jsonify(success=False, message="メニューが見つかりません。"), 404
+            
+            item.name = data.get('name', item.name)
+            item.price = data.get('price', item.price)
+            item.description = data.get('description', getattr(item, 'description', ''))
+        else:
+            # descriptionカラムが存在しない場合、直接SQL更新
+            existing_item = db.session.execute(
+                text('SELECT name, price FROM menu_item WHERE id = :item_id'),
+                {'item_id': item_id}
+            ).fetchone()
+            
+            if not existing_item:
+                return jsonify(success=False, message="メニューが見つかりません。"), 404
+            
+            new_name = data.get('name', existing_item[0])
+            new_price = data.get('price', existing_item[1])
+            
+            db.session.execute(
+                text('UPDATE menu_item SET name = :name, price = :price WHERE id = :item_id'),
+                {'name': new_name, 'price': new_price, 'item_id': item_id}
+            )
         
         db.session.commit()
         return jsonify(success=True, message="メニューを更新しました。")
     except Exception as e:
         db.session.rollback()
         print(f"Menu update error: {e}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
         return jsonify(success=False, message=f"メニューの更新中にエラーが発生しました: {str(e)}"), 500
 
 @app.route('/api/menu/<int:item_id>', methods=['DELETE'])
@@ -999,21 +1057,29 @@ def api_delete_menu_item(item_id):
     try:
         has_description = check_column_exists('menu_item', 'description')
         
-        # アイテム情報を取得
+        # アイテム情報を安全に取得
         if has_description:
+            # descriptionカラムが存在する場合
             item = db.session.get(MenuItem, item_id)
             if not item:
                 return jsonify(success=False, message="メニューが見つかりません。"), 404
             item_name = item.name
         else:
-            # descriptionカラムなしでクエリ
-            item_data = db.session.query(MenuItem.name).filter_by(id=item_id).first()
+            # descriptionカラムが存在しない場合、必要な情報のみクエリ
+            item_data = db.session.execute(
+                text('SELECT name FROM menu_item WHERE id = :item_id'),
+                {'item_id': item_id}
+            ).fetchone()
+            
             if not item_data:
                 return jsonify(success=False, message="メニューが見つかりません。"), 404
-            item_name = item_data.name
+            item_name = item_data[0]
+        
+        print(f"Deleting menu item: {item_name} (ID: {item_id})")
         
         # 関連する注文を確認
         related_orders = Order.query.filter_by(item_name=item_name).count()
+        print(f"Related orders count: {related_orders}")
         
         if related_orders > 0:
             # 注文履歴がある場合は非表示にする
@@ -1048,6 +1114,8 @@ def api_delete_menu_item(item_id):
     except Exception as e:
         db.session.rollback()
         print(f"Delete menu item error: {e}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
         return jsonify(success=False, message=f"メニューの削除中にエラーが発生しました: {str(e)}"), 500
 
 @app.route('/api/menu/<int:item_id>/force-delete', methods=['DELETE'])
@@ -1088,9 +1156,21 @@ def api_delete_category(category_id):
         
         category_name = category.name
         
-        # このカテゴリに属するメニューアイテムを確認
-        items_in_category = MenuItem.query.filter_by(category_id=category_id).all()
-        item_count = len(items_in_category)
+        # このカテゴリに属するメニューアイテムの数を安全に確認
+        has_description = check_column_exists('menu_item', 'description')
+        
+        if has_description:
+            # descriptionカラムが存在する場合
+            item_count = MenuItem.query.filter_by(category_id=category_id).count()
+        else:
+            # descriptionカラムが存在しない場合、直接SQLでカウント
+            result = db.session.execute(
+                text('SELECT COUNT(*) FROM menu_item WHERE category_id = :category_id'),
+                {'category_id': category_id}
+            )
+            item_count = result.scalar()
+        
+        print(f"Category {category_name} has {item_count} items")
         
         if item_count > 0:
             return jsonify(
@@ -1437,10 +1517,11 @@ def fix_menu_item_id_constraint():
             'message': f'Failed to fix menu_item_id constraint: {str(e)}',
             'traceback': traceback.format_exc()
         }), 500
-@app.route('/add-description-column')
+# PostgreSQL用カラム追加エンドポイント（強化版）
+@app.route('/force-add-description-column')
 @login_required
-def add_description_column():
-    """PostgreSQLにdescriptionカラムを手動で追加する"""
+def force_add_description_column():
+    """PostgreSQLにdescriptionカラムを強制的に追加する"""
     try:
         with app.app_context():
             is_postgresql = 'postgresql' in app.config['SQLALCHEMY_DATABASE_URI']
@@ -1451,28 +1532,74 @@ def add_description_column():
                     'message': 'This endpoint is only for PostgreSQL databases'
                 }), 400
             
-            # カラムが既に存在するかチェック
-            if check_column_exists('menu_item', 'description'):
+            print("Force adding description column to PostgreSQL...")
+            
+            # Step 1: 現在のカラム状況を確認
+            try:
+                existing_columns = db.session.execute(text("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'menu_item'
+                """)).fetchall()
+                
+                column_names = [row[0] for row in existing_columns]
+                print(f"Existing columns in menu_item: {column_names}")
+                
+                if 'description' in column_names:
+                    return jsonify({
+                        'status': 'success',
+                        'message': 'Description column already exists',
+                        'columns': column_names
+                    })
+                    
+            except Exception as e:
+                print(f"Column check error: {e}")
+            
+            # Step 2: descriptionカラムを追加
+            try:
+                print("Adding description column...")
+                db.session.execute(text('ALTER TABLE menu_item ADD COLUMN description TEXT'))
+                db.session.commit()
+                print("Description column added successfully")
+                
+                # Step 3: 追加後の確認
+                new_columns = db.session.execute(text("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'menu_item'
+                """)).fetchall()
+                
+                new_column_names = [row[0] for row in new_columns]
+                
                 return jsonify({
                     'status': 'success',
-                    'message': 'Description column already exists'
+                    'message': 'Description column added successfully',
+                    'before_columns': column_names if 'column_names' in locals() else [],
+                    'after_columns': new_column_names
                 })
-            
-            # descriptionカラムを追加
-            print("Adding description column to PostgreSQL...")
-            db.session.execute(text('ALTER TABLE menu_item ADD COLUMN description TEXT'))
-            db.session.commit()
-            
-            return jsonify({
-                'status': 'success',
-                'message': 'Description column added successfully to PostgreSQL'
-            })
+                
+            except Exception as e:
+                db.session.rollback()
+                error_msg = str(e)
+                
+                if 'already exists' in error_msg or 'duplicate column' in error_msg:
+                    return jsonify({
+                        'status': 'success',
+                        'message': 'Description column already exists (from error)',
+                        'error_ignored': error_msg
+                    })
+                else:
+                    raise e
             
     except Exception as e:
         db.session.rollback()
+        import traceback
         return jsonify({
             'status': 'error',
-            'message': f'Failed to add description column: {str(e)}'
+            'message': f'Failed to add description column: {str(e)}',
+            'traceback': traceback.format_exc()
         }), 500
 @app.route('/test-menu-data')
 @login_required
