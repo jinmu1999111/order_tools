@@ -542,7 +542,7 @@
             </div>
         `;
         document.body.appendChild(toast);
-        const bsToast = new bootstrap.Toast(toast, { autohide: true, delay: 2000 });
+        const bsToast = new bootstrap.Toast(toast, { autohide: true, delay: 500 });
         bsToast.show();
         toast.addEventListener('hidden.bs.toast', () => toast.remove());
     }
