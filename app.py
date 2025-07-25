@@ -11,6 +11,7 @@ import pytz
 from collections import defaultdict
 from math import ceil
 from flask_migrate import Migrate
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 # --- アプリケーションとデータベースの初期設定 ---
 app = Flask(__name__)
