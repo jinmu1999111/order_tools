@@ -582,16 +582,169 @@ def logout():
     flash('ログアウトしました。', 'success')
     return redirect(url_for('login'))
 
+# フロントエンド設定用エンドポイント
+@app.route('/api/kitchen/config')
+@login_required  
+def api_kitchen_config():
+    """キッチン画面の設定を返す（フロントエンド制御用）"""
+    return jsonify({
+        'workflow_mode': 'complete_only',
+        'show_start_button': False,       # 調理開始ボタンを非表示
+        'show_complete_button': True,     # 完了ボタンを表示
+        'show_preparing_status': False,   # 調理中ステータスを非表示
+        'allowed_transitions': {
+            'pending': ['served'],        # pendingから直接servedのみ
+            'served': []                  # servedからの遷移なし
+        },
+        'button_config': {
+            'complete_text': '完了',
+            'complete_class': 'btn btn-success',
+            'complete_icon': 'fas fa-check-circle'
+        }
+    })
+
+# キッチン画面用CSSを動的配信
+@app.route('/static/css/kitchen-override.css')
+def serve_kitchen_css():
+    """キッチン画面の調理開始ボタンを非表示にするCSS"""
+    css_content = """
+/* キッチン画面：調理開始ボタンを完全に非表示 */
+.start-cooking-btn,
+.btn-start-cooking,
+[data-action="start-cooking"],
+button[onclick*="startCooking"] {
+    display: none !important;
+}
+
+/* 調理中ステータス関連を非表示 */
+.preparing-status,
+.status-preparing,
+[data-status="preparing"] {
+    display: none !important;
+}
+
+/* 完了ボタンのスタイル強化 */
+.complete-btn,
+.btn-complete {
+    background: linear-gradient(45deg, #28a745, #20c997);
+    border: none;
+    color: white;
+    font-weight: bold;
+    padding: 10px 20px;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+}
+
+.complete-btn:hover,
+.btn-complete:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(40, 167, 69, 0.4);
+    background: linear-gradient(45deg, #218838, #1dd1a1);
+}
+
+/* 注文カードのスタイル改善 */
+.order-card {
+    border-left: 4px solid #28a745;
+    transition: all 0.3s ease;
+}
+
+.order-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+}
+
+/* ペンディング統計の強調 */
+#pending-count {
+    font-size: 2.5rem;
+    font-weight: bold;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+}
+
+/* 調理中統計カードを非表示 */
+.preparing-stats,
+[data-stat="preparing"] {
+    display: none !important;
+}
+"""
+    
+    from flask import Response
+    return Response(css_content, mimetype='text/css')
+
+# キッチン画面用JavaScript設定
+@app.route('/static/js/kitchen-config.js')
+def serve_kitchen_js():
+    """キッチン画面用JavaScript設定"""
+    js_content = """
+// キッチン画面設定
+window.KITCHEN_CONFIG = {
+    workflow_mode: 'complete_only',
+    show_start_button: false,
+    show_complete_button: true,
+    auto_refresh_interval: 15000,
+    
+    // ボタン処理をオーバーライド
+    overrideButtons: function() {
+        // 調理開始ボタンを全て非表示
+        document.querySelectorAll('.start-cooking-btn, [data-action="start-cooking"], button[onclick*="startCooking"]').forEach(btn => {
+            btn.style.display = 'none';
+        });
+        
+        // 調理開始ボタンのクリックイベントを無効化
+        document.addEventListener('click', function(e) {
+            if (e.target.matches('.start-cooking-btn') || 
+                e.target.getAttribute('data-action') === 'start-cooking' ||
+                (e.target.getAttribute('onclick') && e.target.getAttribute('onclick').includes('startCooking'))) {
+                e.preventDefault();
+                e.stopPropagation();
+                alert('調理開始機能は廃止されました。完了ボタンをご使用ください。');
+                return false;
+            }
+        });
+    }
+};
+
+// ページ読み込み時に設定を適用
+document.addEventListener('DOMContentLoaded', function() {
+    if (window.KITCHEN_CONFIG) {
+        window.KITCHEN_CONFIG.overrideButtons();
+        
+        // 定期的にボタン設定をチェック（動的コンテンツ対応）
+        setInterval(window.KITCHEN_CONFIG.overrideButtons, 2000);
+    }
+});
+"""
+    
+    from flask import Response
+    return Response(js_content, mimetype='application/javascript')
+
+# キッチンページの修正（CSS/JS自動読み込み）
 @app.route('/kitchen')
 @login_required
 def kitchen():
-    today_start = datetime.datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)
-    pending_orders = Order.query.filter_by(status='pending').count()
-    preparing_orders = 0  # preparingは廃止
-    ready_orders = Order.query.filter_by(status='ready').count()
-    total_orders = Order.query.filter(Order.timestamp >= today_start).count()
-    stats = {'pending_orders': pending_orders, 'preparing_orders': preparing_orders, 'ready_orders': ready_orders, 'total_orders': total_orders}
-    return render_template('kitchen.html', stats=stats)
+    try:
+        today_start = datetime.datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)
+        pending_orders = Order.query.filter_by(status='pending').count()
+        preparing_orders = 0  # preparingは廃止
+        ready_orders = Order.query.filter_by(status='ready').count()
+        total_orders = Order.query.filter(Order.timestamp >= today_start).count()
+        
+        stats = {
+            'pending_orders': pending_orders,
+            'preparing_orders': preparing_orders,
+            'ready_orders': ready_orders,
+            'total_orders': total_orders,
+            # フロントエンド制御用
+            'workflow_mode': 'complete_only',
+            'css_override_url': '/static/css/kitchen-override.css',
+            'js_config_url': '/static/js/kitchen-config.js'
+        }
+        
+        return render_template('kitchen.html', stats=stats)
+    except Exception as e:
+        print(f"Kitchen page error: {e}")
+        flash('キッチン画面の読み込み中にエラーが発生しました。', 'error')
+        return redirect(url_for('dashboard'))
 
 @app.route('/dashboard')
 @login_required
@@ -829,12 +982,38 @@ def api_customer_orders():
 def api_kitchen_orders():
     # pending注文のみ表示（preparingは廃止）
     orders_query = Order.query.filter_by(status='pending').order_by(Order.timestamp.asc()).all()
-    output = [{'id': o.id, 'table_name': o.table.name, 'item_name': o.item_name, 'status': o.status, 'timestamp': o.timestamp.isoformat()} for o in orders_query]
+    
+    # フロントエンド用に注文データを整形（調理開始なし、完了のみ）
+    output = []
+    for o in orders_query:
+        order_data = {
+            'id': o.id,
+            'table_name': o.table.name,
+            'item_name': o.item_name,
+            'status': o.status,
+            'timestamp': o.timestamp.isoformat(),
+            # フロントエンド用のフラグ
+            'can_complete': True,  # 完了可能
+            'can_start': False,    # 調理開始不可（廃止）
+            'show_complete_only': True  # 完了ボタンのみ表示
+        }
+        output.append(order_data)
+    
     pending_orders_count = Order.query.filter_by(status='pending').count()
     preparing_orders_count = 0  # preparingは廃止
     ready_orders_count = Order.query.filter_by(status='ready').count()
     total_orders_today_count = Order.query.filter(Order.timestamp >= datetime.datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)).count()
-    stats = {'pending_orders': pending_orders_count, 'preparing_orders': preparing_orders_count, 'ready_orders': ready_orders_count, 'total_orders': total_orders_today_count}
+    
+    stats = {
+        'pending_orders': pending_orders_count,
+        'preparing_orders': preparing_orders_count,
+        'ready_orders': ready_orders_count,
+        'total_orders': total_orders_today_count,
+        # フロントエンド用設定
+        'workflow_mode': 'complete_only',  # 完了のみモード
+        'show_preparing': False            # 調理中ステータスを非表示
+    }
+    
     return jsonify(success=True, orders=output, stats=stats)
 
 @app.route('/api/kitchen/orders/<int:order_id>/status', methods=['PUT'])
