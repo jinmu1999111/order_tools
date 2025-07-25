@@ -455,17 +455,30 @@ def table_menu(table_id):
     if not table: 
         abort(404)
     
-    menu_data = get_menu_data()
-    return render_template('table_menu.html', table=table, **menu_data)
+    try:
+        menu_data = get_menu_data()
+        return render_template('table_menu.html', table=table, **menu_data)
+    except Exception as e:
+        print(f"Table menu error: {e}")
+        import traceback
+        print(f"Full traceback: {traceback.format_exc()}")
+        flash('メニューの読み込み中にエラーが発生しました。', 'error')
+        return redirect(url_for('index'))
 
 @app.route('/table/<int:table_id>/menu_partial')
 def table_menu_partial(table_id):
-    sort_by = request.args.get('sort_by', 'category')
-    menu_data = get_menu_data(sort_by)
-    if sort_by == 'popularity':
-        return render_template('_menu_popular.html', items=menu_data['item_list'])
-    else:
-        return render_template('_menu_category.html', categorized_menu=menu_data['categorized_menu'])
+    try:
+        sort_by = request.args.get('sort_by', 'category')
+        menu_data = get_menu_data(sort_by)
+        if sort_by == 'popularity':
+            return render_template('_menu_popular.html', items=menu_data['item_list'])
+        else:
+            return render_template('_menu_category.html', categorized_menu=menu_data['categorized_menu'])
+    except Exception as e:
+        print(f"Menu partial error: {e}")
+        import traceback
+        print(f"Full traceback: {traceback.format_exc()}")
+        return f"<div class='alert alert-danger'>メニューの読み込み中にエラーが発生しました: {str(e)}</div>", 500
 
 # --- 管理者ページ ---
 @app.route('/login', methods=['GET', 'POST'])
@@ -620,12 +633,17 @@ def admin_guidance():
 @app.route('/admin/analytics')
 @login_required
 def admin_analytics():
-    today_start = datetime.datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)
-    today_orders = Order.query.filter(Order.timestamp >= today_start).count()
-    today_revenue = db.session.query(func.sum(Order.item_price)).filter(Order.timestamp >= today_start, Order.status != 'cancelled').scalar() or 0
-    popular_items_query = db.session.query(Order.item_name, func.count(Order.id).label('total_quantity')).filter(Order.timestamp >= today_start, Order.status != 'cancelled').group_by(Order.item_name).order_by(desc('total_quantity')).limit(5).all()
-    popular_items = [{'item_name': name, 'total_quantity': count} for name, count in popular_items_query]
-    return render_template('admin_analytics.html', today_orders=today_orders, today_revenue=today_revenue, popular_items=popular_items)
+    try:
+        today_start = datetime.datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)
+        today_orders = Order.query.filter(Order.timestamp >= today_start).count()
+        today_revenue = db.session.query(func.sum(Order.item_price)).filter(Order.timestamp >= today_start, Order.status != 'cancelled').scalar() or 0
+        popular_items_query = db.session.query(Order.item_name, func.count(Order.id).label('total_quantity')).filter(Order.timestamp >= today_start, Order.status != 'cancelled').group_by(Order.item_name).order_by(desc('total_quantity')).limit(5).all()
+        popular_items = [{'item_name': name, 'total_quantity': count} for name, count in popular_items_query]
+        return render_template('admin_analytics.html', today_orders=today_orders, today_revenue=today_revenue, popular_items=popular_items)
+    except Exception as e:
+        print(f"Analytics error: {e}")
+        flash(f'アナリティクス画面の読み込み中にエラーが発生しました: {str(e)}', 'error')
+        return redirect(url_for('dashboard'))
 
 @app.route('/admin/security')
 @login_required
@@ -655,8 +673,30 @@ def submit_order():
         return jsonify(success=False, message="このテーブルは現在ご利用いただけません。お手数ですが、再度QRコードを読み取ってください。"), 400
 
     try:
+        has_description = check_column_exists('menu_item', 'description')
+        
         for item_id, item_data in items.items():
-            menu_item = db.session.get(MenuItem, int(item_id))
+            # 安全にMenuItemを取得
+            if has_description:
+                menu_item = db.session.get(MenuItem, int(item_id))
+            else:
+                # descriptionカラムなしでクエリ
+                menu_item_raw = db.session.query(
+                    MenuItem.id, MenuItem.name, MenuItem.price, MenuItem.active,
+                    MenuItem.popularity_count
+                ).filter_by(id=int(item_id)).first()
+                
+                if menu_item_raw:
+                    menu_item = type('MenuItem', (), {
+                        'id': menu_item_raw.id,
+                        'name': menu_item_raw.name,
+                        'price': menu_item_raw.price,
+                        'active': menu_item_raw.active,
+                        'popularity_count': menu_item_raw.popularity_count
+                    })()
+                else:
+                    menu_item = None
+            
             if menu_item and item_data.get('quantity', 0) > 0:
                 for _ in range(item_data['quantity']):
                     order = Order(
@@ -667,7 +707,19 @@ def submit_order():
                         individual_session_id=individual_session_id
                     )
                     db.session.add(order)
-                menu_item.popularity_count += item_data['quantity']
+                
+                # popularity_countの更新
+                if has_description:
+                    # 通常のMenuItemオブジェクトの場合
+                    actual_menu_item = db.session.get(MenuItem, int(item_id))
+                    if actual_menu_item:
+                        actual_menu_item.popularity_count += item_data['quantity']
+                else:
+                    # descriptionカラムなしの場合、直接SQLで更新
+                    db.session.execute(
+                        text('UPDATE menu_item SET popularity_count = popularity_count + :qty WHERE id = :item_id'),
+                        {'qty': item_data['quantity'], 'item_id': int(item_id)}
+                    )
         
         table.last_accessed = datetime.datetime.now(JST)
         db.session.commit()
@@ -676,6 +728,8 @@ def submit_order():
     except Exception as e:
         db.session.rollback()
         print(f"注文送信エラー: {e}")
+        import traceback
+        print(f"Full traceback: {traceback.format_exc()}")
         return jsonify(success=False, message="注文の処理中にエラーが発生しました。"), 500
 
 @app.route('/api/customer/orders')
@@ -880,15 +934,33 @@ def api_update_menu_item(item_id):
 @login_required
 def api_delete_menu_item(item_id):
     try:
-        item = db.session.get(MenuItem, item_id)
-        if not item:
-            return jsonify(success=False, message="メニューが見つかりません。"), 404
+        has_description = check_column_exists('menu_item', 'description')
         
-        item_name = item.name
+        # アイテム情報を取得
+        if has_description:
+            item = db.session.get(MenuItem, item_id)
+            if not item:
+                return jsonify(success=False, message="メニューが見つかりません。"), 404
+            item_name = item.name
+        else:
+            # descriptionカラムなしでクエリ
+            item_data = db.session.query(MenuItem.name).filter_by(id=item_id).first()
+            if not item_data:
+                return jsonify(success=False, message="メニューが見つかりません。"), 404
+            item_name = item_data.name
+        
+        # 関連する注文を確認
         related_orders = Order.query.filter_by(item_name=item_name).count()
         
         if related_orders > 0:
-            item.active = False
+            # 注文履歴がある場合は非表示にする
+            if has_description:
+                item.active = False
+            else:
+                db.session.execute(
+                    text('UPDATE menu_item SET active = false WHERE id = :item_id'),
+                    {'item_id': item_id}
+                )
             db.session.commit()
             return jsonify(
                 success=True, 
@@ -896,7 +968,14 @@ def api_delete_menu_item(item_id):
                 action="deactivated"
             )
         else:
-            db.session.delete(item)
+            # 注文履歴がない場合は完全削除
+            if has_description:
+                db.session.delete(item)
+            else:
+                db.session.execute(
+                    text('DELETE FROM menu_item WHERE id = :item_id'),
+                    {'item_id': item_id}
+                )
             db.session.commit()
             return jsonify(
                 success=True, 
@@ -905,6 +984,7 @@ def api_delete_menu_item(item_id):
             )
     except Exception as e:
         db.session.rollback()
+        print(f"Delete menu item error: {e}")
         return jsonify(success=False, message=f"メニューの削除中にエラーが発生しました: {str(e)}"), 500
 
 @app.route('/api/menu/<int:item_id>/force-delete', methods=['DELETE'])
@@ -961,11 +1041,34 @@ def api_delete_category(category_id):
 @app.route('/api/menu/toggle/<int:item_id>', methods=['POST'])
 @login_required
 def api_toggle_menu_item_active(item_id):
-    item = db.session.get(MenuItem, item_id)
-    if not item: return jsonify(success=False, message="Item not found"), 404
-    item.active = not item.active
-    db.session.commit()
-    return jsonify(success=True, active=item.active)
+    try:
+        has_description = check_column_exists('menu_item', 'description')
+        
+        if has_description:
+            # 通常のORM使用
+            item = db.session.get(MenuItem, item_id)
+            if not item: 
+                return jsonify(success=False, message="Item not found"), 404
+            item.active = not item.active
+            new_active = item.active
+        else:
+            # 直接SQL更新
+            current_item = db.session.query(MenuItem.active).filter_by(id=item_id).first()
+            if not current_item:
+                return jsonify(success=False, message="Item not found"), 404
+            
+            new_active = not current_item.active
+            db.session.execute(
+                text('UPDATE menu_item SET active = :new_active WHERE id = :item_id'),
+                {'new_active': new_active, 'item_id': item_id}
+            )
+        
+        db.session.commit()
+        return jsonify(success=True, active=new_active)
+    except Exception as e:
+        db.session.rollback()
+        print(f"Toggle menu item error: {e}")
+        return jsonify(success=False, message=str(e)), 500
 
 @app.route('/api/menu/order', methods=['POST'])
 @login_required
@@ -974,15 +1077,30 @@ def update_menu_order():
     item_ids = data.get('item_ids')
     if not item_ids: return jsonify(success=False, message="No item IDs provided"), 400
     try:
-        items_map = {item.id: item for item in MenuItem.query.filter(MenuItem.id.in_(item_ids)).all()}
-        for index, item_id_str in enumerate(item_ids):
-            item_id = int(item_id_str)
-            item = items_map.get(item_id)
-            if item: item.sort_order = index
+        has_description = check_column_exists('menu_item', 'description')
+        
+        if has_description:
+            # 通常のORM使用
+            items_map = {item.id: item for item in MenuItem.query.filter(MenuItem.id.in_(item_ids)).all()}
+            for index, item_id_str in enumerate(item_ids):
+                item_id = int(item_id_str)
+                item = items_map.get(item_id)
+                if item: 
+                    item.sort_order = index
+        else:
+            # 直接SQL更新
+            for index, item_id_str in enumerate(item_ids):
+                item_id = int(item_id_str)
+                db.session.execute(
+                    text('UPDATE menu_item SET sort_order = :sort_order WHERE id = :item_id'),
+                    {'sort_order': index, 'item_id': item_id}
+                )
+        
         db.session.commit()
         return jsonify(success=True)
     except Exception as e:
         db.session.rollback()
+        print(f"Menu order update error: {e}")
         return jsonify(success=False, message=str(e)), 500
 
 @app.route('/api/category/order', methods=['POST'])
@@ -1033,16 +1151,44 @@ def api_cancel_order(order_id):
 @app.route('/api/dashboard/summary')
 @login_required
 def api_dashboard_summary():
-    today_start = datetime.datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)
-    sales_query = db.session.query(func.sum(Order.item_price), func.count(Order.id)).filter(Order.timestamp >= today_start, Order.status != 'cancelled')
-    today_sales, today_orders = sales_query.one()
-    today_sales = today_sales or 0
-    today_orders = today_orders or 0
-    avg_spend = (today_sales / today_orders) if today_orders > 0 else 0
-    occupied_tables = Table.query.filter_by(status='occupied').count()
-    total_tables = Table.query.count()
-    popular_items = MenuItem.query.order_by(MenuItem.popularity_count.desc()).limit(5).all()
-    return jsonify(today_sales=f"¥{today_sales:,}", today_orders=today_orders, avg_spend=f"¥{avg_spend:,.0f}", occupied_tables=occupied_tables, total_tables=total_tables, popular_items=[{'name': item.name, 'count': item.popularity_count} for item in popular_items])
+    try:
+        today_start = datetime.datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)
+        sales_query = db.session.query(func.sum(Order.item_price), func.count(Order.id)).filter(Order.timestamp >= today_start, Order.status != 'cancelled')
+        today_sales, today_orders = sales_query.one()
+        today_sales = today_sales or 0
+        today_orders = today_orders or 0
+        avg_spend = (today_sales / today_orders) if today_orders > 0 else 0
+        occupied_tables = Table.query.filter_by(status='occupied').count()
+        total_tables = Table.query.count()
+        
+        # 人気アイテムを安全に取得
+        popular_items = []
+        try:
+            has_description = check_column_exists('menu_item', 'description')
+            if has_description:
+                popular_items_raw = MenuItem.query.order_by(MenuItem.popularity_count.desc()).limit(5).all()
+                popular_items = [{'name': item.name, 'count': item.popularity_count} for item in popular_items_raw]
+            else:
+                # descriptionカラムなしでクエリ
+                popular_items_raw = db.session.query(
+                    MenuItem.name, MenuItem.popularity_count
+                ).order_by(MenuItem.popularity_count.desc()).limit(5).all()
+                popular_items = [{'name': item.name, 'count': item.popularity_count} for item in popular_items_raw]
+        except Exception as e:
+            print(f"Error fetching popular items: {e}")
+            popular_items = []
+        
+        return jsonify(
+            today_sales=f"¥{today_sales:,}", 
+            today_orders=today_orders, 
+            avg_spend=f"¥{avg_spend:,.0f}", 
+            occupied_tables=occupied_tables, 
+            total_tables=total_tables, 
+            popular_items=popular_items
+        )
+    except Exception as e:
+        print(f"Dashboard summary error: {e}")
+        return jsonify(success=False, message=str(e)), 500
 
 @app.route('/api/dashboard/sales')
 @login_required
@@ -1067,12 +1213,23 @@ def api_dashboard_sales():
 @login_required
 def api_sales_reset():
     try:
+        # 注文データを削除
         db.session.query(Order).delete()
-        MenuItem.query.update({MenuItem.popularity_count: 0})
+        
+        # popularity_countをリセット（安全に実行）
+        has_description = check_column_exists('menu_item', 'description')
+        if has_description:
+            # 通常のORM更新
+            MenuItem.query.update({MenuItem.popularity_count: 0})
+        else:
+            # 直接SQL更新
+            db.session.execute(text('UPDATE menu_item SET popularity_count = 0'))
+        
         db.session.commit()
         return jsonify(success=True, message="全ての売上データと注文履歴がリセットされました。")
     except Exception as e:
         db.session.rollback()
+        print(f"Sales reset error: {e}")
         return jsonify(success=False, message=f"リセット中にエラーが発生しました: {str(e)}"), 500
 
 @app.route('/api/kitchen/status')
