@@ -719,91 +719,8 @@ document.addEventListener('DOMContentLoaded', function() {
     return Response(js_content, mimetype='application/javascript')
 
 # キッチンページの修正（CSS/JS自動読み込み）
-# テンプレート編集不要な強制修正エンドポイント
-@app.route('/fix-kitchen-buttons')
-@login_required
-def fix_kitchen_buttons():
-    """キッチンの調理開始ボタンを強制的に無効化するJavaScript"""
-    js_fix = """
-    <script>
-    // ページ読み込み完了後に実行
-    document.addEventListener('DOMContentLoaded', function() {
-        console.log('キッチンボタン修正スクリプト開始');
-        
-        function removeStartButtons() {
-            // 調理開始ボタンを全て検索・削除
-            const startButtons = document.querySelectorAll([
-                'button[onclick*="startCooking"]',
-                '.start-cooking-btn',
-                '.btn-warning[onclick*="start"]',
-                'button:contains("調理開始")',
-                'button:contains("開始")'
-            ].join(','));
-            
-            startButtons.forEach(button => {
-                console.log('調理開始ボタンを非表示:', button);
-                button.style.display = 'none';
-                button.disabled = true;
-            });
-            
-            // テキストで検索
-            document.querySelectorAll('button').forEach(button => {
-                if (button.textContent.includes('調理開始') || 
-                    button.textContent.includes('開始') ||
-                    button.getAttribute('onclick')?.includes('startCooking')) {
-                    console.log('テキスト検索で調理開始ボタン発見:', button);
-                    button.style.display = 'none';
-                    button.disabled = true;
-                }
-            });
-            
-            console.log('調理開始ボタン削除完了');
-        }
-        
-        // 即座に実行
-        setTimeout(removeStartButtons, 100);
-        
-        // 定期的に実行（動的コンテンツ対応）
-        setInterval(removeStartButtons, 2000);
-        
-        // Ajax完了後にも実行
-        $(document).ajaxComplete(function() {
-            setTimeout(removeStartButtons, 500);
-        });
-    });
-    
-    // 調理開始関数を無効化
-    window.startCooking = function(orderId) {
-        alert('調理開始機能は廃止されました。\\n完了ボタンをお使いください。');
-        return false;
-    };
-    </script>
-    
-    <style>
-    /* CSS でも強制非表示 */
-    button[onclick*="startCooking"],
-    .start-cooking-btn,
-    .btn-start {
-        display: none !important;
-    }
-    
-    /* 完了ボタンを目立たせる */
-    button[onclick*="completeOrder"],
-    .complete-btn {
-        background: #28a745 !important;
-        color: white !important;
-        font-weight: bold !important;
-        padding: 8px 16px !important;
-        border-radius: 6px !important;
-    }
-    </style>
-    """
-    
-    return js_fix, 200, {'Content-Type': 'text/html; charset=utf-8'}
-
-# キッチンページに自動修正を組み込み
 @app.route('/kitchen')
-@login_required  
+@login_required
 def kitchen():
     try:
         today_start = datetime.datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)
@@ -817,62 +734,13 @@ def kitchen():
             'preparing_orders': preparing_orders,
             'ready_orders': ready_orders,
             'total_orders': total_orders,
-            # 自動修正フラグ
-            'auto_fix_buttons': True,
-            'workflow_mode': 'complete_only'
+            # フロントエンド制御用
+            'workflow_mode': 'complete_only',
+            'css_override_url': '/static/css/kitchen-override.css',
+            'js_config_url': '/static/js/kitchen-config.js'
         }
         
-        # テンプレートレンダリング後にボタン修正スクリプトを追加
-        template_content = render_template('kitchen.html', stats=stats)
-        
-        # 修正スクリプトを自動挿入
-        fix_script = """
-        <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // 調理開始ボタンを強制削除
-            function removeStartButtons() {
-                document.querySelectorAll('button').forEach(button => {
-                    const onclick = button.getAttribute('onclick') || '';
-                    const text = button.textContent || '';
-                    
-                    if (onclick.includes('startCooking') || 
-                        text.includes('調理開始') || 
-                        text.includes('開始')) {
-                        button.style.display = 'none';
-                        button.disabled = true;
-                        console.log('調理開始ボタンを無効化:', button);
-                    }
-                });
-            }
-            
-            // 即座に実行
-            removeStartButtons();
-            
-            // 定期実行
-            setInterval(removeStartButtons, 2000);
-        });
-        
-        // startCooking関数を上書き
-        window.startCooking = function() {
-            alert('調理開始機能は廃止されました。完了ボタンをお使いください。');
-            return false;
-        };
-        </script>
-        
-        <style>
-        button[onclick*="startCooking"] { display: none !important; }
-        .start-cooking-btn { display: none !important; }
-        </style>
-        """
-        
-        # </body>タグの前に修正スクリプトを挿入
-        if '</body>' in template_content:
-            template_content = template_content.replace('</body>', fix_script + '</body>')
-        else:
-            template_content += fix_script
-            
-        return template_content
-        
+        return render_template('kitchen.html', stats=stats)
     except Exception as e:
         print(f"Kitchen page error: {e}")
         flash('キッチン画面の読み込み中にエラーが発生しました。', 'error')
