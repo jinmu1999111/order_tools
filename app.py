@@ -587,7 +587,7 @@ def logout():
 def kitchen():
     today_start = datetime.datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)
     pending_orders = Order.query.filter_by(status='pending').count()
-    preparing_orders = Order.query.filter_by(status='preparing').count()
+    preparing_orders = 0  # preparingは廃止
     ready_orders = Order.query.filter_by(status='ready').count()
     total_orders = Order.query.filter(Order.timestamp >= today_start).count()
     stats = {'pending_orders': pending_orders, 'preparing_orders': preparing_orders, 'ready_orders': ready_orders, 'total_orders': total_orders}
@@ -827,10 +827,11 @@ def api_customer_orders():
 @app.route('/api/kitchen/orders')
 @login_required
 def api_kitchen_orders():
-    orders_query = Order.query.filter(Order.status.in_(['pending', 'preparing'])).order_by(Order.timestamp.asc()).all()
+    # pending注文のみ表示（preparingは廃止）
+    orders_query = Order.query.filter_by(status='pending').order_by(Order.timestamp.asc()).all()
     output = [{'id': o.id, 'table_name': o.table.name, 'item_name': o.item_name, 'status': o.status, 'timestamp': o.timestamp.isoformat()} for o in orders_query]
     pending_orders_count = Order.query.filter_by(status='pending').count()
-    preparing_orders_count = Order.query.filter_by(status='preparing').count()
+    preparing_orders_count = 0  # preparingは廃止
     ready_orders_count = Order.query.filter_by(status='ready').count()
     total_orders_today_count = Order.query.filter(Order.timestamp >= datetime.datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)).count()
     stats = {'pending_orders': pending_orders_count, 'preparing_orders': preparing_orders_count, 'ready_orders': ready_orders_count, 'total_orders': total_orders_today_count}
@@ -843,21 +844,25 @@ def update_order_status(order_id):
     new_status = data.get('status')
     order_to_update = db.session.get(Order, order_id)
     if not order_to_update: return jsonify(success=False, message="注文が見つかりません。"), 404
-    if new_status == 'preparing' and order_to_update.status == 'pending':
-        order_to_update.status = new_status
-    elif new_status == 'served' and order_to_update.status in ['pending', 'preparing']:
+    
+    # 調理開始を廃止し、直接完了に変更
+    if new_status == 'served' and order_to_update.status == 'pending':
         order_to_update.status = new_status
     else:
         return jsonify(success=False, message="許可されていないステータス変更です。"), 400
+    
     db.session.commit()
-    return jsonify(success=True, message=f"注文ステータスを {new_status} に更新しました。")
+    return jsonify(success=True, message=f"注文を完了しました。")
 
 @app.route('/api/order/complete/<session_id>', methods=['POST'])
 @login_required
 def api_complete_order(session_id):
-    orders = Order.query.filter_by(persistent_session_id=session_id, status='ready').all()
-    if not orders: return jsonify(success=False, message="対象の注文が見つかりません。"), 404
-    for order in orders: order.status = 'served'
+    # readyステータスは廃止し、pendingから直接servedに
+    orders = Order.query.filter_by(persistent_session_id=session_id, status='pending').all()
+    if not orders: 
+        return jsonify(success=False, message="対象の注文が見つかりません。"), 404
+    for order in orders: 
+        order.status = 'served'
     db.session.commit()
     return jsonify(success=True)
 
@@ -1082,18 +1087,30 @@ def api_delete_category(category_id):
             return jsonify(success=False, message="カテゴリが見つかりません。"), 404
         
         category_name = category.name
-        item_count = MenuItem.query.filter_by(category_id=category_id).count()
         
+        # このカテゴリに属するメニューアイテムを確認
+        items_in_category = MenuItem.query.filter_by(category_id=category_id).all()
+        item_count = len(items_in_category)
+        
+        if item_count > 0:
+            return jsonify(
+                success=False, 
+                message=f"カテゴリ '{category_name}' には {item_count} 個のメニューが含まれています。先にメニューを削除するか、他のカテゴリに移動してください。"
+            ), 400
+        
+        # メニューアイテムがない場合のみ削除
         db.session.delete(category)
         db.session.commit()
         
         return jsonify(
             success=True, 
-            message=f"カテゴリ '{category_name}' を削除しました。",
-            deleted_items=item_count
+            message=f"カテゴリ '{category_name}' を削除しました。"
         )
     except Exception as e:
         db.session.rollback()
+        import traceback
+        print(f"Category deletion error: {e}")
+        print(f"Traceback: {traceback.format_exc()}")
         return jsonify(success=False, message=f"カテゴリの削除中にエラーが発生しました: {str(e)}"), 500
 
 @app.route('/api/menu/toggle/<int:item_id>', methods=['POST'])
@@ -1293,7 +1310,8 @@ def api_sales_reset():
 @app.route('/api/kitchen/status')
 @login_required
 def api_kitchen_status():
-    q = Order.query.filter(Order.status.in_(['pending', 'preparing']))
+    # pendingのみチェック（preparingは廃止）
+    q = Order.query.filter_by(status='pending')
     is_cooking = db.session.query(q.exists()).scalar()
     return jsonify({'cooking_active': is_cooking})
 
@@ -1311,7 +1329,43 @@ def health_check():
     except Exception as e:
         return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
 
-# PostgreSQL緊急修正用エンドポイント
+# 各種統計で preparing を除外したテストエンドポイント
+@app.route('/test-kitchen-stats')
+@login_required
+def test_kitchen_stats():
+    """キッチン統計のテスト（preparing除外）"""
+    try:
+        today_start = datetime.datetime.now(JST).replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        # preparingは除外した統計
+        pending_orders = Order.query.filter_by(status='pending').count()
+        served_orders = Order.query.filter_by(status='served').count()
+        cancelled_orders = Order.query.filter_by(status='cancelled').count()
+        total_orders_today = Order.query.filter(Order.timestamp >= today_start).count()
+        
+        # 注文ステータス別集計
+        status_counts = {}
+        status_data = db.session.query(Order.status, func.count(Order.id)).group_by(Order.status).all()
+        for status, count in status_data:
+            status_counts[status] = count
+        
+        return jsonify({
+            'status': 'success',
+            'stats': {
+                'pending_orders': pending_orders,
+                'served_orders': served_orders,
+                'cancelled_orders': cancelled_orders,
+                'total_orders_today': total_orders_today
+            },
+            'status_breakdown': status_counts,
+            'message': 'preparing status has been deprecated'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
 @app.route('/fix-menu-item-id-constraint')
 @login_required
 def fix_menu_item_id_constraint():
