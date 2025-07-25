@@ -1,330 +1,255 @@
 {% extends "layout.html" %}
 {% block title %}キッチン管理{% endblock %}
 
-{% block extra_css %}
+{% block extra_css %}	
 <style>
-    .kitchen-header {
-        background-color: #fff;
-        border-radius: 12px;
-        padding: 1rem;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-    }
-    .stat-item { text-align: center; }
-    .stat-number { font-size: 2rem; font-weight: 500; color: var(--color-primary); }
-    .order-card {
-        border-left: 5px solid;
-        transition: all 0.3s ease;
-    }
-    .order-card.status-pending { border-left-color: #FFB74D; }
-    .order-card.status-preparing { border-left-color: #64B5F6; }
+    .kitchen-header {
+        background-color: #fff;
+        border-radius: 12px;
+        padding: 1rem;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+    }
+    .stat-item { text-align: center; }
+    .stat-number { font-size: 2rem; font-weight: 500; color: var(--color-primary); }
+    .order-card {
+        border-left: 5px solid;
+        transition: all 0.3s ease;
+    }
+    .order-card.status-pending { border-left-color: #FFB74D; }
+    /* preparingステータスは使わないが念のため残す */
+    .order-card.status-preparing { border-left-color: #64B5F6; } 
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 style="font-size: 2.5rem;">🍳 キッチン管理</h1>
-        <button class="btn btn-light border" id="sound-toggle">
-            <i class="bi bi-volume-up-fill"></i>
-        </button>
-    </div>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 style="font-size: 2.5rem;">🍳 キッチン管理</h1>
+            </div>
 
-    <div class="row kitchen-header mb-4">
-        <div class="col-6 col-md-3 stat-item">
-            <div class="stat-number" id="pending-count">{{ stats.pending_orders or 0 }}</div>
-            <div>調理待ち</div>
-        </div>
-        <div class="col-6 col-md-3 stat-item">
-            <div class="stat-number" id="preparing-count">{{ stats.preparing_orders or 0 }}</div>
-            <div>調理中</div>
-        </div>
-        <div class="col-6 col-md-3 stat-item">
-            <div class="stat-number" id="ready-count">{{ stats.ready_orders or 0 }}</div>
-            <div>提供準備OK</div>
-        </div>
-        <div class="col-6 col-md-3 stat-item">
-            <div class="stat-number" id="total-count">{{ stats.total_orders or 0 }}</div>
-            <div>本日の注文件数</div>
-        </div>
-    </div>
+    <div class="row kitchen-header mb-4">
+        <div class="col-6 col-md-3 stat-item">
+            <div class="stat-number" id="pending-count">{{ stats.pending_orders or 0 }}</div>
+            <div>調理待ち</div>
+        </div>
+        <div class="col-6 col-md-3 stat-item">
+            <div class="stat-number" id="preparing-count">0</div>
+            <div>調理中</div>
+        </div>
+        <div class="col-6 col-md-3 stat-item">
+            <div class="stat-number" id="ready-count">{{ stats.ready_orders or 0 }}</div>
+            <div>提供準備OK</div>
+        </div>
+        <div class="col-6 col-md-3 stat-item">
+            <div class="stat-number" id="total-count">{{ stats.total_orders or 0 }}</div>
+            <div>本日の注文件数</div>
+        </div>
+    </div>
 
-    <div class="orders-grid row" id="orders-grid">
-        <!-- 注文カードがここに動的に表示される -->
-    </div>
-    <div class="text-center p-5" id="empty-state" style="display: none;">
-        <i class="bi bi-cup-hot" style="font-size: 4rem; opacity: 0.3;"></i>
-        <h3 class="mt-3 text-muted">現在の注文はありません</h3>
-        <p class="text-muted">新しい注文が入ると自動で表示されます</p>
-    </div>
+    <div class="orders-grid row" id="orders-grid">
+            </div>
+    <div class="text-center p-5" id="empty-state" style="display: none;">
+        <i class="bi bi-cup-hot" style="font-size: 4rem; opacity: 0.3;"></i>
+        <h3 class="mt-3 text-muted">現在の注文はありません</h3>
+        <p class="text-muted">新しい注文が入ると自動で表示されます</p>
+    </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-    let soundEnabled = false;
-    let knownOrderIds = new Set();
-    let notificationSound = null;
+    // --- ここからが修正・適用したJavaScriptです ---
 
-    // 音声ファイルの初期化
-    function initSound() {
-        try {
-            const soundUrl = "{{ url_for('static', filename='sounds/notification.mp3') }}";
-            notificationSound = new Audio(soundUrl);
-            notificationSound.load();
-            
-            notificationSound.addEventListener('error', function(e) {
-                console.warn('音声ファイルの読み込みに失敗しました:', e);
-                notificationSound = null;
-            });
-        } catch (error) {
-            console.warn('音声機能が利用できません:', error);
-            notificationSound = null;
-        }
-    }
+    let knownOrderIds = new Set();
 
-    // 通知表示関数
-    function showNotification(message, type = 'info') {
-        const alertDiv = document.createElement('div');
-        alertDiv.className = `alert alert-${type === 'error' ? 'danger' : 'info'} alert-dismissible fade show position-fixed`;
-        alertDiv.style.cssText = `
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 9999;
-            min-width: 300px;
-            text-align: center;
-        `;
-        alertDiv.innerHTML = `
-            <i class="bi bi-${type === 'error' ? 'exclamation-triangle' : 'info-circle'}"></i>
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
-        document.body.appendChild(alertDiv);
-        
-        // 5秒後に自動削除
-        setTimeout(() => {
-            if (alertDiv.parentNode) {
-                alertDiv.remove();
-            }
-        }, 5000);
-    }
+    // 通知（メッセージ）表示関数
+    function showMessage(message, type = 'info') {
+        const alertDiv = document.createElement('div');
+        const alertClass = type === 'success' ? 'alert-success' : (type === 'error' ? 'alert-danger' : 'alert-info');
+        alertDiv.className = `alert ${alertClass} alert-dismissible fade show position-fixed`;
+        alertDiv.style.cssText = `
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 9999;
+            min-width: 300px;
+            text-align: center;
+        `;
+        const iconClass = type === 'success' ? 'bi-check-circle-fill' : (type === 'error' ? 'bi-exclamation-triangle-fill' : 'bi-info-circle-fill');
+        alertDiv.innerHTML = `
+            <i class="bi ${iconClass}"></i>
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        `;
+        document.body.appendChild(alertDiv);
+        
+        // 5秒後に自動削除
+        setTimeout(() => {
+            if (alertDiv.parentNode) {
+                alertDiv.remove();
+            }
+        }, 5000);
+    }
 
-    // 注文データを取得
-    async function fetchOrders() {
-        try {
-            const response = await fetch('/api/kitchen/orders');
-            
-            if (response.status === 401) {
-                showNotification('セッションが切れました。再度ログインしてください。', 'error');
-                setTimeout(() => {
-                    window.location.href = '/login';
-                }, 2000);
-                return;
-            }
-            
-            if (!response.ok) {
-                console.error('Network error:', response.status, response.statusText);
-                showNotification('サーバーとの通信でエラーが発生しました', 'error');
-                return;
-            }
-            
-            const data = await response.json();
-            if (data.success) {
-                updateStats(data.stats);
-                
+    // 注文データを取得して画面を更新
+    async function fetchAndRenderOrders() {
+        try {
+            const response = await fetch('/api/kitchen/orders');
+            
+            if (response.status === 401) {
+                showMessage('セッションが切れました。再度ログインしてください。', 'error');
+                setTimeout(() => { window.location.href = '/login'; }, 2000);
+                return;
+            }
+            
+            if (!response.ok) {
+                showMessage('サーバーとの通信エラーが発生しました', 'error');
+                return;
+            }
+            
+            const data = await response.json();
+            if (data.success) {
+                updateStats(data.stats);
+                
                 // 新しい注文の検出
-                const currentOrderIds = new Set(data.orders.map(o => o.id));
-                const isNewOrder = [...currentOrderIds].some(id => !knownOrderIds.has(id));
+                const currentOrderIds = new Set(data.orders.map(o => o.id));
+                const isNewOrder = [...currentOrderIds].some(id => !knownOrderIds.has(id));
                 
                 if (isNewOrder && knownOrderIds.size > 0) {
-                    showNotification('🔔 新しい注文が入りました！', 'info');
-                    if (soundEnabled) {
-                        playSound();
-                    }
+                    showMessage('🔔 新しい注文が入りました！', 'info');
                 }
-                
-                knownOrderIds = currentOrderIds;
-                renderOrders(data.orders);
-            } else {
-                console.error('API error:', data);
-                showNotification('データの取得に失敗しました', 'error');
-            }
-        } catch (error) {
-            console.error("Fetch error:", error);
-            showNotification('ネットワークエラーが発生しました', 'error');
-        }
-    }
+                
+                knownOrderIds = currentOrderIds;
+                renderOrders(data.orders);
+            } else {
+                showMessage(data.message || 'データの取得に失敗しました', 'error');
+            }
+        } catch (error) {
+            console.error("Fetch error:", error);
+            showMessage('ネットワークエラーが発生しました', 'error');
+        }
+    }
 
-    // 統計情報を更新
-    function updateStats(stats) {
-        document.getElementById('pending-count').textContent = stats.pending_orders || 0;
-        document.getElementById('preparing-count').textContent = stats.preparing_orders || 0;
-        document.getElementById('ready-count').textContent = stats.ready_orders || 0;
-        document.getElementById('total-count').textContent = stats.total_orders || 0;
-    }
+    // 統計情報を更新
+    function updateStats(stats) {
+        document.getElementById('pending-count').textContent = stats.pending_orders || 0;
+        document.getElementById('total-count').textContent = stats.total_orders || 0;
+        // 調理中と準備完了は新しいフローでは使わないため、固定値またはサーバーからの値を入れる
+        document.getElementById('preparing-count').textContent = stats.preparing_orders || 0; // 基本的に0になる想定
+        document.getElementById('ready-count').textContent = stats.ready_orders || 0;
+    }
 
-    // 注文カードを描画
-    function renderOrders(orders) {
-        const grid = document.getElementById('orders-grid');
-        const emptyState = document.getElementById('empty-state');
-        
-        if (!grid || !emptyState) {
-            console.error('Required DOM elements not found');
-            return;
-        }
-        
-        grid.innerHTML = '';
+    // 注文カードを描画
+    function renderOrders(orders) {
+        const grid = document.getElementById('orders-grid');
+        const emptyState = document.getElementById('empty-state');
+        grid.innerHTML = '';
 
-        if (orders.length === 0) {
-            emptyState.style.display = 'block';
-            return;
-        }
-        
-        emptyState.style.display = 'none';
+        if (orders.length === 0) {
+            emptyState.style.display = 'block';
+            return;
+        }
+        
+        emptyState.style.display = 'none';
 
-        orders.forEach(order => {
-            const card = document.createElement('div');
-            card.className = 'col-12 col-md-6 col-lg-4 col-xl-3 mb-3'; 
-            
-            // ステータスに応じたアクションボタン
-            let actionButton = '';
-            if (order.status === 'pending') {
-                actionButton = `<button class="btn btn-sm btn-info w-100" onclick="updateStatus(${order.id}, 'preparing')">調理開始</button>`;
-            } else if (order.status === 'preparing') {
-                actionButton = `<button class="btn btn-sm btn-success w-100" onclick="updateStatus(${order.id}, 'served')">完了</button>`;
+        orders.forEach(order => {
+            const card = document.createElement('div');
+            card.className = 'col-12 col-md-6 col-lg-4 col-xl-3 mb-3'; 
+            
+            // ★修正点：ステータスに応じたアクションボタンを変更
+            let actionButton = '';
+            if (order.status === 'pending') {
+                // 「調理開始」をなくし、「完了」ボタンを直接表示
+                actionButton = `<button class="btn btn-sm btn-success w-100" onclick="completeOrder(${order.id}, this)">完了</button>`;
+            } else {
+                // 完了済みの場合はバッジを表示（ボタンはなし）
+                actionButton = `<span class="badge bg-secondary w-100 p-2">完了済み</span>`;
             }
 
-            // 注文時刻のフォーマット
-            const orderTime = new Date(order.timestamp).toLocaleTimeString('ja-JP', {
-                hour: '2-digit',
-                minute: '2-digit'
-            });
+            const orderTime = new Date(order.timestamp).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
 
-            card.innerHTML = `
-                <div class="card h-100 order-card status-${order.status}">
-                    <div class="card-body p-3 d-flex flex-column">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <h6 class="card-title mb-0 fw-bold">${order.table_name}</h6>
-                            <small class="text-muted">${orderTime}</small>
-                        </div>
-                        <div class="text-center my-3 flex-grow-1 d-flex align-items-center justify-content-center">
-                            <span class="fs-5 fw-bold">${order.item_name}</span>
-                        </div>
-                        <div class="mt-auto">
-                            ${actionButton}
-                        </div>
-                    </div>
-                </div>
-            `;
-            grid.appendChild(card);
-        });
-    }
+            card.innerHTML = `
+                <div class="card h-100 order-card status-${order.status}">
+                    <div class="card-body p-3 d-flex flex-column">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="card-title mb-0 fw-bold">${order.table_name}</h6>
+                            <small class="text-muted">${orderTime}</small>
+                        </div>
+                        <div class="text-center my-3 flex-grow-1 d-flex align-items-center justify-content-center">
+                            <span class="fs-5 fw-bold">${order.item_name}</span>
+                        </div>
+                        <div class="mt-auto">
+                            ${actionButton}
+                        </div>
+                    </div>
+                </div>
+            `;
+            grid.appendChild(card);
+        });
+    }
 
-    // 注文ステータスを更新
-    async function updateStatus(orderId, newStatus) {
-        try {
-            const response = await fetch(`/api/kitchen/orders/${orderId}/status`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status: newStatus })
-            });
-            
-            if (response.status === 401) {
-                showNotification('セッションが切れました。再度ログインしてください。', 'error');
-                setTimeout(() => {
-                    window.location.href = '/login';
-                }, 2000);
-                return;
-            }
-            
-            if (response.ok) {
-                const statusText = newStatus === 'preparing' ? '調理開始' : '完了';
-                showNotification(`注文のステータスを「${statusText}」に更新しました`, 'info');
-                fetchOrders(); // データを再取得
-            } else {
-                const data = await response.json();
-                showNotification(data.message || 'ステータスの更新に失敗しました', 'error');
-            }
-        } catch (error) {
-            console.error('Update status error:', error);
-            showNotification('ステータスの更新中にエラーが発生しました', 'error');
-        }
-    }
-    
-    // サウンドを再生
-     function playSound() {
-        if (!notificationSound || !soundEnabled) return; // 音声ファイルがないか、無効なら何もしない
-
-        notificationSound.currentTime = 0;
-        const playPromise = notificationSound.play();
-
-        if (playPromise !== undefined) {
-            playPromise.catch(error => {
-                console.warn("音声の再生に失敗しました。ユーザー操作が一度必要かもしれません。", error);
-                // 再生に失敗した場合、一度サウンドを無効にする
-                soundEnabled = false;
-                updateSoundButton();
-                showNotification('🔇 音声再生の許可が必要です。サウンドボタンを一度クリックしてください。', 'error');
-            });
-        }
-    }
-
-    // サウンドボタンの表示を更新
-    function updateSoundButton() {
-        const icon = document.querySelector('#sound-toggle i');
-        if (icon) {
-            icon.className = soundEnabled ? 'bi bi-volume-up-fill' : 'bi bi-volume-mute-fill';
-        }
-        
-        const button = document.getElementById('sound-toggle');
+    // ★修正点：注文を直接「完了(served)」ステータスに更新する関数
+    async function completeOrder(orderId, button) {
+        // ボタンを無効化して二重クリックを防止
         if (button) {
-            button.title = soundEnabled ? '音声通知をOFFにする' : '音声通知をONにする';
+            button.disabled = true;
+            button.innerHTML = `<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 処理中...`;
         }
-    }
+        try {
+            const response = await fetch(`/api/kitchen/orders/${orderId}/status`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'served' }) // ステータスを 'served' に直接変更
+            });
 
-    // サウンドトグルボタンの処理
-    document.getElementById('sound-toggle').addEventListener('click', () => {
-        soundEnabled = !soundEnabled;
-        updateSoundButton();
-        
-        if (soundEnabled) {
-            showNotification('🔊 音声通知が有効になりました', 'info');
-            // ユーザー操作によって初めて音声を再生可能にする
-            if (notificationSound) {
-                notificationSound.play().then(() => {
-                    notificationSound.pause();
-                    notificationSound.currentTime = 0;
-                }).catch(e => {
-                    console.warn("音声の初期化に失敗しました:", e);
-                });
+            if (response.status === 401) {
+                showMessage('セッションが切れました。再度ログインしてください。', 'error');
+                setTimeout(() => { window.location.href = '/login'; }, 2000);
+                return;
+            }
+            
+            const data = await response.json();
+            if (response.ok && data.success) {
+                showMessage('注文を完了しました！', 'success');
+                fetchAndRenderOrders(); // 成功したらデータを再取得して画面を更新
+            } else {
+                showMessage(data.message || 'ステータスの更新に失敗しました', 'error');
+                // 失敗した場合はボタンを元に戻す
+                if (button) {
+                    button.disabled = false;
+                    button.innerHTML = '完了';
+                }
+            }
+        } catch (error) {
+            console.error('Update status error:', error);
+            showMessage('ステータスの更新中にエラーが発生しました', 'error');
+            // エラー時もボタンを元に戻す
+            if (button) {
+                button.disabled = false;
+                button.innerHTML = '完了';
             }
-        } else {
-            showNotification('🔇 音声通知が無効になりました', 'info');
-        }
-    });
+        }
+    }
 
-    // ページ読み込み時の処理
-    document.addEventListener('DOMContentLoaded', function() {
-        console.log('キッチン管理画面を初期化中...');
-        
-        initSound();
-        updateSoundButton();
-        
-        // 初回データ取得
-        fetchOrders();
-        
-        // 定期更新（15秒ごと）
-        setInterval(fetchOrders, 15000);
-        
-        console.log('キッチン管理画面の初期化完了');
-    });
+    // --- 初期化処理 ---
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('キッチン管理画面を初期化中...');
+        
+        // 初回データ取得
+        fetchAndRenderOrders();
+        
+        // 定期更新（15秒ごと）
+        setInterval(fetchAndRenderOrders, 15000);
+        
+        console.log('キッチン管理画面の初期化完了');
+    });
 
-    // ページの可視性が変わった時の処理（タブが非アクティブになった時など）
-    document.addEventListener('visibilitychange', function() {
-        if (!document.hidden) {
-            // ページが再度アクティブになった時はすぐにデータを更新
-            fetchOrders();
-        }
-    });
+    // ページの可視性が変わった時の処理
+    document.addEventListener('visibilitychange', function() {
+        if (!document.hidden) {
+            // ページが再度アクティブになった時はすぐにデータを更新
+            fetchAndRenderOrders();
+        }
+    });
 </script>
 {% endblock %}
