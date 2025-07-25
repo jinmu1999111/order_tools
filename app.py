@@ -13,30 +13,58 @@ from math import ceil
 from flask_migrate import Migrate
 from werkzeug.middleware.proxy_fix import ProxyFix
 
+# .envファイルを読み込む
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    # python-dotenvがインストールされていない場合はスキップ
+    pass
+
 # --- アプリケーションとデータベースの初期設定 ---
 app = Flask(__name__)
 
-# SECRET_KEYの強化
+# SECRET_KEYの強化（PostgreSQL対応）
 SECRET_KEY = os.environ.get('SECRET_KEY')
 if not SECRET_KEY:
-    raise ValueError("No SECRET_KEY set for Flask application. Please set it in the environment variables.")
+    # 開発環境用のデフォルトSECRET_KEY（本番環境では必ず環境変数で設定すること）
+    SECRET_KEY = 'dev-secret-key-please-change-in-production-1234567890'
+    print("Warning: Using default SECRET_KEY. Please set SECRET_KEY in environment variables for production.")
+
 app.secret_key = SECRET_KEY
 
-# データベース設定の改善
+# データベース設定の改善（PostgreSQL対応）
 db_url = os.environ.get('DATABASE_URL')
 if db_url and db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
 if not db_url:
-    db_url = 'sqlite:///instance/test.db'
+    # ローカル開発環境用のSQLite設定
+    base_dir = os.path.abspath(os.path.dirname(__file__))
+    instance_dir = os.path.join(base_dir, 'instance')
+    os.makedirs(instance_dir, exist_ok=True)
+    db_file = os.path.join(instance_dir, 'test.db')
+    db_url = f'sqlite:///{db_file}'
 
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-    'pool_recycle': 280,   # Renderのタイムアウト(300秒)より短く設定
-    'pool_pre_ping': True, # 接続が有効か事前に確認する
-    'pool_size': 5,        # 保持する接続の数
-    'max_overflow': 2      # 一時的に許可する追加の接続数
-}
+
+# PostgreSQLとSQLiteの両方に対応したエンジン設定
+if 'postgresql' in db_url:
+    # PostgreSQL用設定（Render対応）
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'pool_recycle': 280,   # Renderのタイムアウト(300秒)より短く設定
+        'pool_pre_ping': True, # 接続が有効か事前に確認する
+        'pool_size': 5,        # 保持する接続の数
+        'max_overflow': 2      # 一時的に許可する追加の接続数
+    }
+    print("Using PostgreSQL configuration for production")
+else:
+    # SQLite用設定（ローカル開発環境）
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'pool_pre_ping': True,
+    }
+    print("Using SQLite configuration for development")
+
 app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(hours=8)
 
 # セッションの改善
@@ -128,84 +156,142 @@ class TempQRToken(db.Model):
         expiry = self.created_at + datetime.timedelta(minutes=30)
         return datetime.datetime.now(JST) < expiry
 
-# --- データベース初期化関数 ---
-def init_database():
-    """アプリケーション起動時にデータベースを初期化"""
+# PostgreSQL対応のマイグレーション用ヘルパー関数
+def check_column_exists(table_name, column_name):
+    """指定されたテーブルに指定されたカラムが存在するかチェック"""
     try:
+        if 'postgresql' in app.config['SQLALCHEMY_DATABASE_URI']:
+            # PostgreSQL用のクエリ
+            result = db.session.execute(text("""
+                SELECT COUNT(*) 
+                FROM information_schema.columns 
+                WHERE table_name = :table_name AND column_name = :column_name
+            """), {'table_name': table_name, 'column_name': column_name})
+            return result.scalar() > 0
+        else:
+            # SQLite用のクエリ
+            result = db.session.execute(text(f'PRAGMA table_info({table_name})'))
+            columns = [row[1] for row in result.fetchall()]
+            return column_name in columns
+    except Exception:
+        return False
+
+# --- PostgreSQL対応版のデータベース初期化関数 ---
+def init_database():
+    """アプリケーション起動時にデータベースを初期化（PostgreSQL対応）"""
+    try:
+        # instanceディレクトリが存在することを確認（SQLiteの場合のみ）
+        if 'sqlite' in app.config['SQLALCHEMY_DATABASE_URI']:
+            instance_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance')
+            os.makedirs(instance_path, exist_ok=True)
+            print(f"Instance directory: {instance_path}")
+        
         with app.app_context():
-            db.create_all()
+            # データベースファイルのパスを確認
+            db_path = app.config['SQLALCHEMY_DATABASE_URI']
+            print(f"Database URL: {db_path}")
             
-            # 既存テーブルに新しいカラムを追加（マイグレーション用）
-            try:
-                db.session.execute(text('SELECT description FROM menu_item LIMIT 1'))
-            except Exception:
-                # description カラムが存在しない場合は追加
+            # データベースエンジンの種類を判定
+            is_postgresql = 'postgresql' in db_path
+            print(f"Database type: {'PostgreSQL' if is_postgresql else 'SQLite'}")
+            
+            db.create_all()
+            print("Database tables created successfully.")
+            
+            # 既存テーブルに新しいカラムを追加（PostgreSQL/SQLite対応）
+            if not check_column_exists('menu_item', 'description'):
                 print("Adding new column to menu_item table...")
                 try:
-                    db.session.execute(text('ALTER TABLE menu_item ADD COLUMN description TEXT'))
+                    if is_postgresql:
+                        # PostgreSQL用のALTER TABLE
+                        db.session.execute(text('ALTER TABLE menu_item ADD COLUMN IF NOT EXISTS description TEXT'))
+                    else:
+                        # SQLite用のALTER TABLE
+                        db.session.execute(text('ALTER TABLE menu_item ADD COLUMN description TEXT'))
+                    
                     db.session.commit()
                     print("New column added to menu_item table.")
                 except Exception as e:
                     print(f"Column addition error (may already exist): {e}")
                     db.session.rollback()
+            else:
+                print("Description column already exists.")
             
             # 管理者アカウントの作成
-            if not User.query.filter_by(username='admin').first():
-                admin_user = User(username='admin')
-                admin_user.set_password('password123')
-                db.session.add(admin_user)
-                print("管理者アカウントを作成しました: admin / password123")
+            try:
+                if not User.query.filter_by(username='admin').first():
+                    admin_user = User(username='admin')
+                    admin_user.set_password('password123')
+                    db.session.add(admin_user)
+                    print("管理者アカウントを作成しました: admin / password123")
+            except Exception as e:
+                print(f"Admin user creation error: {e}")
             
             # サンプルテーブルの作成（永続セッションID付き）
-            if Table.query.count() == 0:
-                for i in range(1, 6):
-                    table = Table(name=f'{i}番テーブル')
-                    table.active_qr_token = secrets.token_urlsafe(16)
-                    table.persistent_session_id = secrets.token_hex(16)
-                    db.session.add(table)
-                print("サンプルテーブルを作成しました。")
+            try:
+                if Table.query.count() == 0:
+                    for i in range(1, 6):
+                        table = Table(name=f'{i}番テーブル')
+                        table.active_qr_token = secrets.token_urlsafe(16)
+                        table.persistent_session_id = secrets.token_hex(16)
+                        db.session.add(table)
+                    print("サンプルテーブルを作成しました。")
+            except Exception as e:
+                print(f"Sample table creation error: {e}")
             
             # 既存テーブルに永続セッションIDを追加（マイグレーション用）
-            existing_tables = Table.query.filter_by(persistent_session_id=None).all()
-            for table in existing_tables:
-                table.persistent_session_id = secrets.token_hex(16)
-                if not table.active_qr_token:
-                    table.active_qr_token = secrets.token_urlsafe(16)
-                print(f"テーブル '{table.name}' に永続セッションIDを追加しました。")
+            try:
+                existing_tables = Table.query.filter_by(persistent_session_id=None).all()
+                for table in existing_tables:
+                    table.persistent_session_id = secrets.token_hex(16)
+                    if not table.active_qr_token:
+                        table.active_qr_token = secrets.token_urlsafe(16)
+                    print(f"テーブル '{table.name}' に永続セッションIDを追加しました。")
+            except Exception as e:
+                print(f"Existing table update error: {e}")
             
             # サンプルメニューデータの追加（開発用）
-            if MenuItem.query.count() == 0:
-                print("サンプルメニューを作成中...")
-                # サンプルカテゴリとメニューを作成
-                appetizer_cat = Category(name='前菜', sort_order=0)
-                main_cat = Category(name='メイン', sort_order=1)
-                dessert_cat = Category(name='デザート', sort_order=2)
-                drink_cat = Category(name='ドリンク', sort_order=3)
-                
-                db.session.add_all([appetizer_cat, main_cat, dessert_cat, drink_cat])
-                db.session.flush()
-                
-                sample_items = [
-                    MenuItem(name='シーザーサラダ', price=800, description='新鮮なロメインレタスとパルメザンチーズの定番サラダ', category_id=appetizer_cat.id, sort_order=0),
-                    MenuItem(name='エビとアボカドのカクテル', price=1200, description='プリプリのエビと濃厚アボカドの前菜', category_id=appetizer_cat.id, sort_order=1),
-                    MenuItem(name='グリルチキン', price=1800, description='ジューシーなグリルチキンとハーブソース', category_id=main_cat.id, sort_order=0),
-                    MenuItem(name='ビーフステーキ', price=2800, description='柔らかな牛肉のステーキ、お好みの焼き加減で', category_id=main_cat.id, sort_order=1),
-                    MenuItem(name='パスタ ボロネーゼ', price=1600, description='濃厚なミートソースのパスタ', category_id=main_cat.id, sort_order=2),
-                    MenuItem(name='ティラミス', price=600, description='イタリア伝統のマスカルポーネデザート', category_id=dessert_cat.id, sort_order=0),
-                    MenuItem(name='チョコレートケーキ', price=700, description='濃厚なチョコレートケーキ', category_id=dessert_cat.id, sort_order=1),
-                    MenuItem(name='コーヒー', price=400, description='深煎りのブレンドコーヒー', category_id=drink_cat.id, sort_order=0),
-                    MenuItem(name='紅茶', price=400, description='芳醇な香りの紅茶', category_id=drink_cat.id, sort_order=1),
-                    MenuItem(name='オレンジジュース', price=500, description='新鮮なオレンジの100%ジュース', category_id=drink_cat.id, sort_order=2),
-                ]
-                
-                db.session.add_all(sample_items)
-                print("サンプルメニューを作成しました。")
+            try:
+                if MenuItem.query.count() == 0:
+                    print("サンプルメニューを作成中...")
+                    # サンプルカテゴリとメニューを作成
+                    appetizer_cat = Category(name='前菜', sort_order=0)
+                    main_cat = Category(name='メイン', sort_order=1)
+                    dessert_cat = Category(name='デザート', sort_order=2)
+                    drink_cat = Category(name='ドリンク', sort_order=3)
+                    
+                    db.session.add_all([appetizer_cat, main_cat, dessert_cat, drink_cat])
+                    db.session.flush()
+                    
+                    sample_items = [
+                        MenuItem(name='シーザーサラダ', price=800, description='新鮮なロメインレタスとパルメザンチーズの定番サラダ', category_id=appetizer_cat.id, sort_order=0),
+                        MenuItem(name='エビとアボカドのカクテル', price=1200, description='プリプリのエビと濃厚アボカドの前菜', category_id=appetizer_cat.id, sort_order=1),
+                        MenuItem(name='グリルチキン', price=1800, description='ジューシーなグリルチキンとハーブソース', category_id=main_cat.id, sort_order=0),
+                        MenuItem(name='ビーフステーキ', price=2800, description='柔らかな牛肉のステーキ、お好みの焼き加減で', category_id=main_cat.id, sort_order=1),
+                        MenuItem(name='パスタ ボロネーゼ', price=1600, description='濃厚なミートソースのパスタ', category_id=main_cat.id, sort_order=2),
+                        MenuItem(name='ティラミス', price=600, description='イタリア伝統のマスカルポーネデザート', category_id=dessert_cat.id, sort_order=0),
+                        MenuItem(name='チョコレートケーキ', price=700, description='濃厚なチョコレートケーキ', category_id=dessert_cat.id, sort_order=1),
+                        MenuItem(name='コーヒー', price=400, description='深煎りのブレンドコーヒー', category_id=drink_cat.id, sort_order=0),
+                        MenuItem(name='紅茶', price=400, description='芳醇な香りの紅茶', category_id=drink_cat.id, sort_order=1),
+                        MenuItem(name='オレンジジュース', price=500, description='新鮮なオレンジの100%ジュース', category_id=drink_cat.id, sort_order=2),
+                    ]
+                    
+                    db.session.add_all(sample_items)
+                    print("サンプルメニューを作成しました。")
+            except Exception as e:
+                print(f"Sample menu creation error: {e}")
             
-            db.session.commit()
-            print("データベースの初期化・更新が完了しました。")
+            # すべての変更をコミット
+            try:
+                db.session.commit()
+                print("データベースの初期化・更新が完了しました。")
+            except Exception as e:
+                print(f"Final commit error: {e}")
+                db.session.rollback()
+                
     except Exception as e:
         print(f"データベース初期化エラー: {e}")
-        db.session.rollback()
+        print(f"Error type: {type(e).__name__}")
 
 # --- ルートとロジック ---
 @login_manager.user_loader
@@ -883,6 +969,47 @@ def health_check():
     except Exception as e:
         return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
 
+# デバッグ用ルート（一時的）
+@app.route('/check-db')
+def check_database():
+    try:
+        # MenuItemテーブルの構造を確認
+        from sqlalchemy import inspect
+        inspector = inspect(db.engine)
+        columns = inspector.get_columns('menu_item')
+        
+        column_names = [col['name'] for col in columns]
+        
+        # サンプルデータを確認
+        sample_item = MenuItem.query.first()
+        sample_data = None
+        
+        if sample_item:
+            sample_data = {
+                'id': sample_item.id,
+                'name': sample_item.name,
+                'price': sample_item.price,
+                'description': getattr(sample_item, 'description', 'No description field'),
+                'active': sample_item.active
+            }
+        
+        return jsonify({
+            'status': 'success',
+            'columns': column_names,
+            'has_description': 'description' in column_names,
+            'total_items': MenuItem.query.count(),
+            'sample_item': sample_data,
+            'database_path': app.config['SQLALCHEMY_DATABASE_URI'],
+            'database_type': 'PostgreSQL' if 'postgresql' in app.config['SQLALCHEMY_DATABASE_URI'] else 'SQLite'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'error': str(e),
+            'error_type': type(e).__name__
+        }), 500
+
 # --- エラーハンドラー ---
 @app.errorhandler(404)
 def not_found_error(error):
@@ -911,5 +1038,12 @@ def init_db_command():
     init_database()
 
 if __name__ == '__main__':
+    # アプリケーション起動時にデータベースを初期化
     init_database()
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=True)
+    
+    # デバッグモードでアプリケーションを起動
+    port = int(os.environ.get('PORT', 5000))
+    debug = os.environ.get('FLASK_ENV') != 'production'
+    
+    print(f"Starting application on port {port}, debug={debug}")
+    app.run(host='0.0.0.0', port=port, debug=debug)
