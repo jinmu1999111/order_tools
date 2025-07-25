@@ -195,27 +195,43 @@ def init_database():
             is_postgresql = 'postgresql' in db_path
             print(f"Database type: {'PostgreSQL' if is_postgresql else 'SQLite'}")
             
-            db.create_all()
-            print("Database tables created successfully.")
+            # テーブル作成前にカラム追加の確認
+            try:
+                db.create_all()
+                print("Database tables created successfully.")
+            except Exception as e:
+                print(f"Table creation error: {e}")
+                db.session.rollback()
             
             # 既存テーブルに新しいカラムを追加（PostgreSQL/SQLite対応）
-            if not check_column_exists('menu_item', 'description'):
-                print("Adding new column to menu_item table...")
-                try:
+            try:
+                if not check_column_exists('menu_item', 'description'):
+                    print("Adding description column to menu_item table...")
                     if is_postgresql:
                         # PostgreSQL用のALTER TABLE
-                        db.session.execute(text('ALTER TABLE menu_item ADD COLUMN IF NOT EXISTS description TEXT'))
+                        db.session.execute(text('ALTER TABLE menu_item ADD COLUMN description TEXT'))
                     else:
                         # SQLite用のALTER TABLE
                         db.session.execute(text('ALTER TABLE menu_item ADD COLUMN description TEXT'))
                     
                     db.session.commit()
-                    print("New column added to menu_item table.")
-                except Exception as e:
-                    print(f"Column addition error (may already exist): {e}")
+                    print("Description column added successfully.")
+                else:
+                    print("Description column already exists.")
+            except Exception as e:
+                print(f"Column addition error: {e}")
+                db.session.rollback()
+                
+                # 強制的にテーブルを再作成する場合（最後の手段）
+                print("Attempting to recreate tables...")
+                try:
+                    db.drop_all()
+                    db.create_all()
+                    db.session.commit()
+                    print("Tables recreated successfully.")
+                except Exception as recreate_error:
+                    print(f"Table recreation failed: {recreate_error}")
                     db.session.rollback()
-            else:
-                print("Description column already exists.")
             
             # 管理者アカウントの作成
             try:
@@ -485,12 +501,38 @@ def dashboard():
 @app.route('/admin/menu')
 @login_required
 def admin_menu():
-    sorted_categories = Category.query.order_by(Category.sort_order).all()
-    categorized_items = []
-    for category in sorted_categories:
-        items = MenuItem.query.filter_by(category_id=category.id).order_by(MenuItem.sort_order).all()
-        categorized_items.append({'category_obj': category, 'item_list': items})
-    return render_template('admin_menu.html', categorized_items=categorized_items)
+    try:
+        print("=== Admin Menu Debug ===")
+        
+        # カテゴリを取得
+        print("Fetching categories...")
+        sorted_categories = Category.query.order_by(Category.sort_order).all()
+        print(f"Found {len(sorted_categories)} categories")
+        
+        categorized_items = []
+        for category in sorted_categories:
+            print(f"Processing category: {category.name} (ID: {category.id})")
+            
+            # メニューアイテムを取得
+            items = MenuItem.query.filter_by(category_id=category.id).order_by(MenuItem.sort_order).all()
+            print(f"Found {len(items)} items in category {category.name}")
+            
+            # アイテムを直接使用（変換不要）
+            categorized_items.append({'category_obj': category, 'item_list': items})
+        
+        print(f"Total categorized groups: {len(categorized_items)}")
+        print("Rendering template...")
+        
+        return render_template('admin_menu.html', categorized_items=categorized_items)
+        
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"Admin menu error: {e}")
+        print(f"Full traceback: {error_details}")
+        
+        flash(f'メニュー管理画面の読み込み中にエラーが発生しました: {str(e)}', 'error')
+        return redirect(url_for('dashboard'))
 
 @app.route('/admin/tables')
 @login_required
@@ -694,41 +736,52 @@ def api_delete_table(table_id):
 @app.route('/api/menu/add', methods=['POST'])
 @login_required
 def api_add_menu_item():
-    data = request.json
-    if not all(k in data for k in ['name', 'price', 'category']):
-        return jsonify(success=False, message='Missing data'), 400
-    
-    category_name = data['category']
-    category = Category.query.filter_by(name=category_name).first()
-    if not category:
-        max_cat_order = db.session.query(func.max(Category.sort_order)).scalar()
-        new_cat_order = (max_cat_order + 1) if max_cat_order is not None else 0
-        category = Category(name=category_name, sort_order=new_cat_order)
-        db.session.add(category)
-        db.session.flush()
-    
-    max_item_order = db.session.query(func.max(MenuItem.sort_order)).filter_by(category_id=category.id).scalar()
-    new_item_order = (max_item_order + 1) if max_item_order is not None else 0
-    
-    item = MenuItem(
-        name=data['name'], 
-        price=int(data['price']), 
-        description=data.get('description', ''),
-        category_id=category.id, 
-        sort_order=new_item_order
-    )
-    db.session.add(item)
-    db.session.commit()
-    
-    return jsonify(
-        success=True, 
-        item_id=item.id, 
-        name=item.name, 
-        price=item.price, 
-        category=category.name, 
-        active=item.active,
-        description=item.description
-    )
+    try:
+        data = request.json
+        if not all(k in data for k in ['name', 'price', 'category']):
+            return jsonify(success=False, message='Missing data'), 400
+        
+        category_name = data['category']
+        category = Category.query.filter_by(name=category_name).first()
+        if not category:
+            max_cat_order = db.session.query(func.max(Category.sort_order)).scalar()
+            new_cat_order = (max_cat_order + 1) if max_cat_order is not None else 0
+            category = Category(name=category_name, sort_order=new_cat_order)
+            db.session.add(category)
+            db.session.flush()
+        
+        max_item_order = db.session.query(func.max(MenuItem.sort_order)).filter_by(category_id=category.id).scalar()
+        new_item_order = (max_item_order + 1) if max_item_order is not None else 0
+        
+        # MenuItemを安全に作成
+        item_data = {
+            'name': data['name'],
+            'price': int(data['price']),
+            'category_id': category.id,
+            'sort_order': new_item_order
+        }
+        
+        # descriptionフィールドが存在する場合のみ追加
+        if check_column_exists('menu_item', 'description'):
+            item_data['description'] = data.get('description', '')
+        
+        item = MenuItem(**item_data)
+        db.session.add(item)
+        db.session.commit()
+        
+        return jsonify(
+            success=True, 
+            item_id=item.id, 
+            name=item.name, 
+            price=item.price, 
+            category=category.name, 
+            active=item.active,
+            description=getattr(item, 'description', '')
+        )
+    except Exception as e:
+        db.session.rollback()
+        print(f"Menu add error: {e}")
+        return jsonify(success=False, message=f'メニュー追加中にエラーが発生しました: {str(e)}'), 500
 
 @app.route('/api/menu/<int:item_id>/update', methods=['PUT'])
 @login_required
@@ -741,12 +794,20 @@ def api_update_menu_item(item_id):
         data = request.json
         item.name = data.get('name', item.name)
         item.price = data.get('price', item.price)
-        item.description = data.get('description', item.description)
+        
+        # descriptionフィールドが存在するかチェック
+        try:
+            if hasattr(item, 'description'):
+                item.description = data.get('description', getattr(item, 'description', ''))
+        except Exception as desc_error:
+            print(f"Description field error: {desc_error}")
+            # descriptionフィールドのエラーは無視して続行
         
         db.session.commit()
         return jsonify(success=True, message="メニューを更新しました。")
     except Exception as e:
         db.session.rollback()
+        print(f"Menu update error: {e}")
         return jsonify(success=False, message=f"メニューの更新中にエラーが発生しました: {str(e)}"), 500
 
 @app.route('/api/menu/<int:item_id>', methods=['DELETE'])
@@ -969,38 +1030,111 @@ def health_check():
     except Exception as e:
         return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
 
-# デバッグ用ルート（一時的）
+# テスト用ルート（デバッグ用）
+@app.route('/test-menu-data')
+@login_required
+def test_menu_data():
+    """メニューデータの構造を確認するテスト用エンドポイント"""
+    try:
+        categories = Category.query.order_by(Category.sort_order).all()
+        result = []
+        
+        for category in categories:
+            items = MenuItem.query.filter_by(category_id=category.id).order_by(MenuItem.sort_order).all()
+            
+            category_data = {
+                'category': {
+                    'id': category.id,
+                    'name': category.name,
+                    'sort_order': category.sort_order
+                },
+                'items': []
+            }
+            
+            for item in items:
+                item_data = {
+                    'id': item.id,
+                    'name': item.name,
+                    'price': item.price,
+                    'description': getattr(item, 'description', ''),
+                    'active': item.active,
+                    'sort_order': item.sort_order,
+                    'popularity_count': item.popularity_count
+                }
+                category_data['items'].append(item_data)
+            
+            result.append(category_data)
+        
+        return jsonify({
+            'status': 'success',
+            'data': result,
+            'total_categories': len(categories),
+            'template_exists': os.path.exists(os.path.join(app.template_folder, 'admin_menu.html'))
+        })
+        
+    except Exception as e:
+        import traceback
+        return jsonify({
+            'status': 'error',
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        }), 500
 @app.route('/check-db')
 def check_database():
     try:
         # MenuItemテーブルの構造を確認
         from sqlalchemy import inspect
         inspector = inspect(db.engine)
-        columns = inspector.get_columns('menu_item')
         
-        column_names = [col['name'] for col in columns]
+        menu_columns = []
+        try:
+            menu_columns = inspector.get_columns('menu_item')
+        except Exception as e:
+            print(f"Error getting menu_item columns: {e}")
+        
+        column_names = [col['name'] for col in menu_columns]
         
         # サンプルデータを確認
-        sample_item = MenuItem.query.first()
+        sample_item = None
         sample_data = None
+        total_items = 0
+        
+        try:
+            sample_item = MenuItem.query.first()
+            total_items = MenuItem.query.count()
+        except Exception as e:
+            print(f"Error querying menu items: {e}")
         
         if sample_item:
-            sample_data = {
-                'id': sample_item.id,
-                'name': sample_item.name,
-                'price': sample_item.price,
-                'description': getattr(sample_item, 'description', 'No description field'),
-                'active': sample_item.active
-            }
+            try:
+                sample_data = {
+                    'id': sample_item.id,
+                    'name': sample_item.name,
+                    'price': sample_item.price,
+                    'description': getattr(sample_item, 'description', 'No description field'),
+                    'active': sample_item.active,
+                    'category_id': sample_item.category_id
+                }
+            except Exception as e:
+                sample_data = {'error': f'Error accessing sample item: {e}'}
+        
+        # カテゴリテーブルの確認
+        category_count = 0
+        try:
+            category_count = Category.query.count()
+        except Exception as e:
+            print(f"Error querying categories: {e}")
         
         return jsonify({
             'status': 'success',
             'columns': column_names,
             'has_description': 'description' in column_names,
-            'total_items': MenuItem.query.count(),
+            'total_items': total_items,
+            'total_categories': category_count,
             'sample_item': sample_data,
             'database_path': app.config['SQLALCHEMY_DATABASE_URI'],
-            'database_type': 'PostgreSQL' if 'postgresql' in app.config['SQLALCHEMY_DATABASE_URI'] else 'SQLite'
+            'database_type': 'PostgreSQL' if 'postgresql' in app.config['SQLALCHEMY_DATABASE_URI'] else 'SQLite',
+            'column_check_result': check_column_exists('menu_item', 'description')
         })
         
     except Exception as e:
