@@ -139,6 +139,8 @@ class Order(db.Model):
     status = db.Column(db.String(20), default='pending')
     timestamp = db.Column(db.DateTime(timezone=True), default=lambda: datetime.datetime.now(JST))
     table_id = db.Column(db.Integer, db.ForeignKey('table.id'), nullable=False)
+    # メニューアイテムのID参照（PostgreSQL対応）
+    menu_item_id = db.Column(db.Integer, db.ForeignKey('menu_item.id'), nullable=True)
     # テーブルの永続セッションIDを参照
     persistent_session_id = db.Column(db.String(100), nullable=True)
     # 個別セッション（同じテーブルでも複数グループが注文する場合用）
@@ -161,19 +163,27 @@ def check_column_exists(table_name, column_name):
     """指定されたテーブルに指定されたカラムが存在するかチェック"""
     try:
         if 'postgresql' in app.config['SQLALCHEMY_DATABASE_URI']:
-            # PostgreSQL用のクエリ
+            # PostgreSQL用のクエリ（publicスキーマを明示）
             result = db.session.execute(text("""
                 SELECT COUNT(*) 
                 FROM information_schema.columns 
-                WHERE table_name = :table_name AND column_name = :column_name
+                WHERE table_schema = 'public' 
+                AND table_name = :table_name 
+                AND column_name = :column_name
             """), {'table_name': table_name, 'column_name': column_name})
-            return result.scalar() > 0
+            count = result.scalar()
+            print(f"Column check: {table_name}.{column_name} = {count > 0}")
+            return count > 0
         else:
-            # SQLite用のクエリ
-            result = db.session.execute(text(f'PRAGMA table_info({table_name})'))
+            # SQLite用のクエリ（ダブルクォートを使用）
+            table_query = f'"{table_name}"' if table_name == 'order' else table_name
+            result = db.session.execute(text(f'PRAGMA table_info({table_query})'))
             columns = [row[1] for row in result.fetchall()]
-            return column_name in columns
-    except Exception:
+            exists = column_name in columns
+            print(f"Column check: {table_name}.{column_name} = {exists}")
+            return exists
+    except Exception as e:
+        print(f"Column check error for {table_name}.{column_name}: {e}")
         return False
 
 # --- PostgreSQL対応版のデータベース初期化関数 ---
@@ -205,6 +215,7 @@ def init_database():
             
             # 既存テーブルに新しいカラムを追加（PostgreSQL/SQLite対応）
             try:
+                # MenuItemテーブルのdescriptionカラム追加
                 if not check_column_exists('menu_item', 'description'):
                     print("Adding description column to menu_item table...")
                     if is_postgresql:
@@ -218,16 +229,31 @@ def init_database():
                     print("Description column added successfully.")
                 else:
                     print("Description column already exists.")
+                    
+                # Orderテーブルのmenu_item_idカラム追加
+                if not check_column_exists('order', 'menu_item_id'):
+                    print("Adding menu_item_id column to order table...")
+                    if is_postgresql:
+                        # PostgreSQL用のALTER TABLE
+                        db.session.execute(text('ALTER TABLE "order" ADD COLUMN menu_item_id INTEGER REFERENCES menu_item(id)'))
+                    else:
+                        # SQLite用のALTER TABLE
+                        db.session.execute(text('ALTER TABLE "order" ADD COLUMN menu_item_id INTEGER REFERENCES menu_item(id)'))
+                    
+                    db.session.commit()
+                    print("menu_item_id column added successfully.")
+                else:
+                    print("menu_item_id column already exists.")
+                    
             except Exception as e:
                 print(f"Column addition error: {e}")
                 db.session.rollback()
                 
                 # PostgreSQLの場合、カラムが既に存在するエラーは無視
                 if 'already exists' in str(e) or 'duplicate column' in str(e):
-                    print("Description column already exists (ignored error)")
+                    print("Columns already exist (ignored error)")
                 else:
-                    print("Attempting to continue without description column...")
-                    # descriptionカラムなしで続行
+                    print("Attempting to continue with existing schema...")
             
             # 管理者アカウントの作成
             try:
@@ -251,7 +277,37 @@ def init_database():
             except Exception as e:
                 print(f"Sample table creation error: {e}")
             
-            # 既存テーブルに永続セッションIDを追加（マイグレーション用）
+            # 既存のOrderレコードにmenu_item_idを設定（マイグレーション用）
+            try:
+                if is_postgresql:
+                    # PostgreSQLで既存のOrderレコードを更新
+                    print("Updating existing order records with menu_item_id...")
+                    db.session.execute(text('''
+                        UPDATE "order" 
+                        SET menu_item_id = menu_item.id 
+                        FROM menu_item 
+                        WHERE "order".item_name = menu_item.name 
+                        AND "order".menu_item_id IS NULL
+                    '''))
+                else:
+                    # SQLiteで既存のOrderレコードを更新
+                    print("Updating existing order records with menu_item_id...")
+                    db.session.execute(text('''
+                        UPDATE "order" 
+                        SET menu_item_id = (
+                            SELECT menu_item.id 
+                            FROM menu_item 
+                            WHERE menu_item.name = "order".item_name 
+                            LIMIT 1
+                        ) 
+                        WHERE menu_item_id IS NULL
+                    '''))
+                
+                db.session.commit()
+                print("Existing order records updated successfully.")
+            except Exception as e:
+                print(f"Order records update error: {e}")
+                db.session.rollback()
             try:
                 existing_tables = Table.query.filter_by(persistent_session_id=None).all()
                 for table in existing_tables:
@@ -677,14 +733,17 @@ def submit_order():
         
         for item_id, item_data in items.items():
             # 安全にMenuItemを取得
+            menu_item_id = int(item_id)
+            menu_item = None
+            
             if has_description:
-                menu_item = db.session.get(MenuItem, int(item_id))
+                menu_item = db.session.get(MenuItem, menu_item_id)
             else:
                 # descriptionカラムなしでクエリ
                 menu_item_raw = db.session.query(
                     MenuItem.id, MenuItem.name, MenuItem.price, MenuItem.active,
                     MenuItem.popularity_count
-                ).filter_by(id=int(item_id)).first()
+                ).filter_by(id=menu_item_id).first()
                 
                 if menu_item_raw:
                     menu_item = type('MenuItem', (), {
@@ -694,15 +753,14 @@ def submit_order():
                         'active': menu_item_raw.active,
                         'popularity_count': menu_item_raw.popularity_count
                     })()
-                else:
-                    menu_item = None
             
             if menu_item and item_data.get('quantity', 0) > 0:
                 for _ in range(item_data['quantity']):
                     order = Order(
                         item_name=menu_item.name, 
                         item_price=menu_item.price, 
-                        table_id=table_id, 
+                        table_id=table_id,
+                        menu_item_id=menu_item_id,  # menu_item_idを追加
                         persistent_session_id=persistent_session_id,
                         individual_session_id=individual_session_id
                     )
@@ -711,14 +769,14 @@ def submit_order():
                 # popularity_countの更新
                 if has_description:
                     # 通常のMenuItemオブジェクトの場合
-                    actual_menu_item = db.session.get(MenuItem, int(item_id))
+                    actual_menu_item = db.session.get(MenuItem, menu_item_id)
                     if actual_menu_item:
                         actual_menu_item.popularity_count += item_data['quantity']
                 else:
                     # descriptionカラムなしの場合、直接SQLで更新
                     db.session.execute(
                         text('UPDATE menu_item SET popularity_count = popularity_count + :qty WHERE id = :item_id'),
-                        {'qty': item_data['quantity'], 'item_id': int(item_id)}
+                        {'qty': item_data['quantity'], 'item_id': menu_item_id}
                     )
         
         table.last_accessed = datetime.datetime.now(JST)
@@ -1253,7 +1311,78 @@ def health_check():
     except Exception as e:
         return jsonify({'status': 'unhealthy', 'error': str(e)}), 500
 
-# PostgreSQL用カラム追加エンドポイント
+# PostgreSQL緊急修正用エンドポイント
+@app.route('/fix-menu-item-id-constraint')
+@login_required
+def fix_menu_item_id_constraint():
+    """PostgreSQLのmenu_item_id制約を修正する"""
+    try:
+        with app.app_context():
+            is_postgresql = 'postgresql' in app.config['SQLALCHEMY_DATABASE_URI']
+            
+            if not is_postgresql:
+                return jsonify({
+                    'status': 'error',
+                    'message': 'This endpoint is only for PostgreSQL databases'
+                }), 400
+            
+            print("Fixing menu_item_id constraint in PostgreSQL...")
+            
+            # Step 1: menu_item_idがNOT NULL制約かチェック
+            try:
+                constraint_check = db.session.execute(text("""
+                    SELECT is_nullable 
+                    FROM information_schema.columns 
+                    WHERE table_schema = 'public' 
+                    AND table_name = 'order' 
+                    AND column_name = 'menu_item_id'
+                """)).fetchone()
+                
+                if constraint_check and constraint_check[0] == 'NO':
+                    print("menu_item_id has NOT NULL constraint, removing it...")
+                    # NOT NULL制約を削除
+                    db.session.execute(text('ALTER TABLE "order" ALTER COLUMN menu_item_id DROP NOT NULL'))
+                    db.session.commit()
+                    print("NOT NULL constraint removed from menu_item_id")
+                else:
+                    print("menu_item_id is already nullable")
+                    
+            except Exception as e:
+                print(f"Constraint modification error: {e}")
+                db.session.rollback()
+            
+            # Step 2: 既存のNULLレコードを更新
+            try:
+                print("Updating NULL menu_item_id records...")
+                updated_count = db.session.execute(text('''
+                    UPDATE "order" 
+                    SET menu_item_id = menu_item.id 
+                    FROM menu_item 
+                    WHERE "order".item_name = menu_item.name 
+                    AND "order".menu_item_id IS NULL
+                ''')).rowcount
+                
+                db.session.commit()
+                print(f"Updated {updated_count} order records")
+                
+            except Exception as e:
+                print(f"Record update error: {e}")
+                db.session.rollback()
+            
+            return jsonify({
+                'status': 'success',
+                'message': 'menu_item_id constraint fixed successfully',
+                'updated_records': updated_count if 'updated_count' in locals() else 0
+            })
+            
+    except Exception as e:
+        db.session.rollback()
+        import traceback
+        return jsonify({
+            'status': 'error',
+            'message': f'Failed to fix menu_item_id constraint: {str(e)}',
+            'traceback': traceback.format_exc()
+        }), 500
 @app.route('/add-description-column')
 @login_required
 def add_description_column():
